@@ -130,7 +130,7 @@ export default function PonterIAApp() {
         setSelectedTags((prev) =>
             prev.includes(tagId)
                 ? prev.filter((item) => item !== tagId)
-                : [...prev, tagId]
+                : [...prev, tagId],
         );
     }
 
@@ -140,13 +140,18 @@ export default function PonterIAApp() {
                 <aside
                     className={[
                         "relative flex h-full shrink-0 flex-col border-r border-slate-200/80 bg-white/88 shadow-[0_0_0_1px_rgba(255,255,255,0.55)] backdrop-blur-xl transition-all duration-300",
-                        sidebarOpen ? "w-[300px] sm:w-[320px]" : "w-[84px] sm:w-[92px]",
+                        sidebarOpen
+                            ? "w-[300px] sm:w-[320px]"
+                            : "w-[84px] sm:w-[92px]",
                     ].join(" ")}
                 >
                     <div className="flex h-full min-h-0 flex-col p-4 sm:p-5">
                         <div
-                            className={`mb-5 flex items-center ${sidebarOpen ? "justify-between" : "justify-center"
-                                }`}
+                            className={`mb-5 flex items-center ${
+                                sidebarOpen
+                                    ? "justify-between"
+                                    : "justify-center"
+                            }`}
                         >
                             <button
                                 type="button"
@@ -238,7 +243,9 @@ export default function PonterIAApp() {
                                     </span>
                                     <input
                                         value={searchValue}
-                                        onChange={(e) => setSearchValue(e.target.value)}
+                                        onChange={(e) =>
+                                            setSearchValue(e.target.value)
+                                        }
                                         placeholder="Buscar conversación..."
                                         className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15"
                                     />
@@ -248,20 +255,26 @@ export default function PonterIAApp() {
 
                         <div className="mt-6 min-h-0 flex-1 overflow-hidden">
                             {sidebarOpen ? (
-                                <div key="sidebar-open" className="flex h-full min-h-0 flex-col">
+                                <div
+                                    key="sidebar-open"
+                                    className="flex h-full min-h-0 flex-col"
+                                >
                                     <p className="mb-3 shrink-0 px-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
                                         Conversaciones recientes
                                     </p>
 
                                     <div className="ponter-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-3">
                                         {filteredChats.map((chat) => {
-                                            const active = activeChatId === chat.id;
+                                            const active =
+                                                activeChatId === chat.id;
 
                                             return (
                                                 <button
                                                     key={`open-${chat.id}`}
                                                     type="button"
-                                                    onClick={() => setActiveChatId(chat.id)}
+                                                    onClick={() =>
+                                                        setActiveChatId(chat.id)
+                                                    }
                                                     className={[
                                                         "w-full rounded-2xl border p-3 text-left transition",
                                                         active
@@ -311,7 +324,9 @@ export default function PonterIAApp() {
                                 <p className="text-sm font-medium text-slate-900">
                                     {mockUser.name}
                                 </p>
-                                <p className="text-xs text-slate-500">Usuario actual</p>
+                                <p className="text-xs text-slate-500">
+                                    Usuario actual
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -329,8 +344,9 @@ export default function PonterIAApp() {
                                 </h1>
 
                                 <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                                    Resuelve dudas internas, consulta procedimientos, encuentra
-                                    responsables y prepara mejor cada consulta de cliente.
+                                    Resuelve dudas internas, consulta
+                                    procedimientos, encuentra responsables y
+                                    prepara mejor cada consulta de cliente.
                                 </p>
                             </div>
 
@@ -341,7 +357,11 @@ export default function PonterIAApp() {
                                             <div className="relative flex-1">
                                                 <textarea
                                                     value={message}
-                                                    onChange={(e) => setMessage(e.target.value)}
+                                                    onChange={(e) =>
+                                                        setMessage(
+                                                            e.target.value,
+                                                        )
+                                                    }
                                                     rows={3}
                                                     placeholder="Pregunta lo que quieras..."
                                                     className="min-h-[88px] w-full resize-none rounded-[24px] border border-slate-200 bg-white px-5 py-4 pr-14 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 sm:text-base"
@@ -360,13 +380,18 @@ export default function PonterIAApp() {
 
                                         <div className="flex flex-wrap gap-2 pt-1">
                                             {quickTags.map((tag) => {
-                                                const active = selectedTags.includes(tag.id);
+                                                const active =
+                                                    selectedTags.includes(
+                                                        tag.id,
+                                                    );
 
                                                 return (
                                                     <button
                                                         key={tag.id}
                                                         type="button"
-                                                        onClick={() => toggleTag(tag.id)}
+                                                        onClick={() =>
+                                                            toggleTag(tag.id)
+                                                        }
                                                         className={[
                                                             "rounded-full border px-4 py-2 text-xs font-medium transition sm:text-sm",
                                                             active
@@ -380,24 +405,6 @@ export default function PonterIAApp() {
                                             })}
                                         </div>
                                     </div>
-                                </div>
-
-                                <div className="mt-8 hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
-                                    <InfoCard
-                                        title="Procedimientos"
-                                        description="Consulta pasos internos, documentación necesaria y criterios de trabajo."
-                                        icon={<DocumentIcon />}
-                                    />
-                                    <InfoCard
-                                        title="Equipo"
-                                        description="Identifica responsables, supervisores y a quién debes elevar cada consulta."
-                                        icon={<UsersIcon />}
-                                    />
-                                    <InfoCard
-                                        title="Clientes"
-                                        description="Accede al contexto de cada cliente y obtén ayuda para enfocar tu gestión."
-                                        icon={<BriefcaseIcon />}
-                                    />
                                 </div>
                             </div>
                         </div>
@@ -441,7 +448,9 @@ function SidebarActionButton({
             </span>
 
             {!collapsed && (
-                <span className="text-sm font-medium tracking-wide">{label}</span>
+                <span className="text-sm font-medium tracking-wide">
+                    {label}
+                </span>
             )}
         </button>
     );
@@ -465,7 +474,9 @@ function InfoCard({
             <h3 className="text-sm font-semibold text-slate-900 sm:text-base">
                 {title}
             </h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+                {description}
+            </p>
         </div>
     );
 }
@@ -510,12 +521,38 @@ function AuroraBackground() {
                     preserveAspectRatio="none"
                 >
                     <defs>
-                        <linearGradient id="waveLight1" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#69daa3" stopOpacity="0" />
-                            <stop offset="22%" stopColor="#69daa3" stopOpacity="0.55" />
-                            <stop offset="48%" stopColor="#9ff0c8" stopOpacity="0.8" />
-                            <stop offset="74%" stopColor="#567171" stopOpacity="0.45" />
-                            <stop offset="100%" stopColor="#567171" stopOpacity="0" />
+                        <linearGradient
+                            id="waveLight1"
+                            x1="0%"
+                            y1="0%"
+                            x2="100%"
+                            y2="0%"
+                        >
+                            <stop
+                                offset="0%"
+                                stopColor="#69daa3"
+                                stopOpacity="0"
+                            />
+                            <stop
+                                offset="22%"
+                                stopColor="#69daa3"
+                                stopOpacity="0.55"
+                            />
+                            <stop
+                                offset="48%"
+                                stopColor="#9ff0c8"
+                                stopOpacity="0.8"
+                            />
+                            <stop
+                                offset="74%"
+                                stopColor="#567171"
+                                stopOpacity="0.45"
+                            />
+                            <stop
+                                offset="100%"
+                                stopColor="#567171"
+                                stopOpacity="0"
+                            />
                         </linearGradient>
 
                         <filter id="glowLight1">
@@ -545,12 +582,38 @@ function AuroraBackground() {
                     preserveAspectRatio="none"
                 >
                     <defs>
-                        <linearGradient id="waveLight2" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stopColor="#69daa3" stopOpacity="0" />
-                            <stop offset="22%" stopColor="#69daa3" stopOpacity="0.45" />
-                            <stop offset="48%" stopColor="#9ff0c8" stopOpacity="0.7" />
-                            <stop offset="74%" stopColor="#567171" stopOpacity="0.35" />
-                            <stop offset="100%" stopColor="#567171" stopOpacity="0" />
+                        <linearGradient
+                            id="waveLight2"
+                            x1="0%"
+                            y1="0%"
+                            x2="100%"
+                            y2="0%"
+                        >
+                            <stop
+                                offset="0%"
+                                stopColor="#69daa3"
+                                stopOpacity="0"
+                            />
+                            <stop
+                                offset="22%"
+                                stopColor="#69daa3"
+                                stopOpacity="0.45"
+                            />
+                            <stop
+                                offset="48%"
+                                stopColor="#9ff0c8"
+                                stopOpacity="0.7"
+                            />
+                            <stop
+                                offset="74%"
+                                stopColor="#567171"
+                                stopOpacity="0.35"
+                            />
+                            <stop
+                                offset="100%"
+                                stopColor="#567171"
+                                stopOpacity="0"
+                            />
                         </linearGradient>
 
                         <filter id="glowLight2">
@@ -729,19 +792,10 @@ function UsersIcon() {
             stroke="currentColor"
             strokeWidth="1.8"
         >
-            <path
-                d="M16 19a4 4 0 00-8 0"
-                strokeLinecap="round"
-            />
+            <path d="M16 19a4 4 0 00-8 0" strokeLinecap="round" />
             <circle cx="12" cy="10" r="3" />
-            <path
-                d="M20 19a3.5 3.5 0 00-2.5-3.35"
-                strokeLinecap="round"
-            />
-            <path
-                d="M6.5 15.65A3.5 3.5 0 004 19"
-                strokeLinecap="round"
-            />
+            <path d="M20 19a3.5 3.5 0 00-2.5-3.35" strokeLinecap="round" />
+            <path d="M6.5 15.65A3.5 3.5 0 004 19" strokeLinecap="round" />
             <path d="M17 7.5a2.5 2.5 0 010 5" strokeLinecap="round" />
             <path d="M7 7.5a2.5 2.5 0 000 5" strokeLinecap="round" />
         </svg>
