@@ -7,6 +7,9 @@ import {
     isRagAuthError,
 } from "../lib/ragApi";
 import {
+    getBitrixUserDisplayName,
+    getBitrixUserInitials,
+    getCurrentBitrixUser,
     validateBitrixAppAccess,
 } from "../lib/bitrix";
 
@@ -158,34 +161,57 @@ export default function PonterIAApp() {
                 return;
             }
 
-            try {
-                const user = await initRagAuth();
+            const [ragAuthResult, bitrixUserResult] =
+                await Promise.allSettled([
+                    initRagAuth(),
+                    getCurrentBitrixUser(),
+                ]);
 
-                if (cancelled) return;
+            if (cancelled) return;
 
-                const label = getRagUserDisplayName(user);
-
-                setBitrixUser({
-                    status: "ready",
-                    label,
-                    initials: getRagUserInitials(label),
-                    avatarUrl: "",
-                });
-            } catch (error) {
-                if (cancelled) return;
-
-                setBitrixUser({
-                    status: "error",
-                    label: "Usuario de Bitrix no disponible",
-                    initials: "BT",
-                    avatarUrl: "",
-                });
+            if (ragAuthResult.status === "rejected") {
                 setChatError(
-                    error instanceof Error
-                        ? error.message
+                    ragAuthResult.reason instanceof Error
+                        ? ragAuthResult.reason.message
                         : "No se pudo autenticar con el RAG.",
                 );
             }
+
+            if (
+                ragAuthResult.status === "fulfilled" ||
+                bitrixUserResult.status === "fulfilled"
+            ) {
+                const label =
+                    ragAuthResult.status === "fulfilled"
+                        ? getRagUserDisplayName(ragAuthResult.value)
+                        : getBitrixUserDisplayName(bitrixUserResult.value) ||
+                          "Usuario de Bitrix no disponible";
+                const avatarUrl =
+                    bitrixUserResult.status === "fulfilled"
+                        ? bitrixUserResult.value.PERSONAL_PHOTO || ""
+                        : "";
+
+                setBitrixUser({
+                    status:
+                        ragAuthResult.status === "fulfilled"
+                            ? "ready"
+                            : "error",
+                    label,
+                    initials:
+                        ragAuthResult.status === "fulfilled"
+                            ? getRagUserInitials(label)
+                            : getBitrixUserInitials(label),
+                    avatarUrl,
+                });
+                return;
+            }
+
+            setBitrixUser({
+                status: "error",
+                label: "Usuario de Bitrix no disponible",
+                initials: "BT",
+                avatarUrl: "",
+            });
         }
 
         bootBitrix();
@@ -272,12 +298,12 @@ export default function PonterIAApp() {
                 const user = await initRagAuth();
                 const label = getRagUserDisplayName(user);
 
-                setBitrixUser({
+                setBitrixUser((prev) => ({
                     status: "ready",
                     label,
                     initials: getRagUserInitials(label),
-                    avatarUrl: "",
-                });
+                    avatarUrl: prev.avatarUrl,
+                }));
 
                 return askRag(cleanMessage);
             }
