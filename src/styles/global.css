@@ -82,7 +82,7 @@ textarea {
         height: 0;
     }
 }
-
+/**/
 .aurora-blob,
 .aurora-wave-layer {
     will-change: transform, opacity, filter;
