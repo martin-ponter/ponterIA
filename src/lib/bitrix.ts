@@ -9,7 +9,7 @@ export type BitrixUser = {
 
 export type BitrixAuth = {
     access_token: string;
-    client_endpoint: string;
+    client_endpoint?: string;
     domain?: string;
     expires_in?: number;
     member_id?: string;

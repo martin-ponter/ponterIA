@@ -45,7 +45,10 @@ export async function initRagAuth() {
     }
 
     const auth = await getBitrixAuth();
-    const bitrixDomain = extractBitrixDomain(auth.client_endpoint);
+    const bitrixDomain = extractBitrixDomain({
+        domain: auth.domain,
+        clientEndpoint: auth.client_endpoint,
+    });
     const response = await fetchJson<ExchangeResponse>(
         "/auth/bitrix/exchange",
         {
@@ -73,6 +76,13 @@ export async function getCurrentRagUser() {
             Authorization: `Bearer ${token}`,
         },
     }).then((data) => data.user);
+}
+
+export async function debugCurrentRagAuth() {
+    return {
+        hasToken: Boolean(sessionStorage.getItem(RAG_TOKEN_STORAGE_KEY)),
+        user: await getCurrentRagUser(),
+    };
 }
 
 export async function askRag(message: string) {
@@ -150,11 +160,47 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
     return data;
 }
 
-function extractBitrixDomain(clientEndpoint: string) {
-    try {
-        return new URL(clientEndpoint).host;
-    } catch {
+function extractBitrixDomain({
+    domain,
+    clientEndpoint,
+}: {
+    domain?: string;
+    clientEndpoint?: string;
+}) {
+    const candidates = [
+        domain,
+        getUrlParam("DOMAIN"),
+        getUrlParam("domain"),
+        getHostFromUrl(clientEndpoint),
+        getHostFromUrl(document.referrer),
+    ];
+
+    const detectedDomain = candidates
+        .map((candidate) => candidate?.trim())
+        .find(Boolean);
+
+    if (!detectedDomain) {
         throw new Error("No se pudo detectar el dominio de Bitrix24.");
+    }
+
+    return detectedDomain;
+}
+
+function getUrlParam(name: string) {
+    return new URLSearchParams(window.location.search).get(name) || undefined;
+}
+
+function getHostFromUrl(value?: string) {
+    if (!value) return undefined;
+
+    try {
+        return new URL(value).host;
+    } catch {
+        try {
+            return new URL(`https://${value}`).host;
+        } catch {
+            return undefined;
+        }
     }
 }
 
