@@ -143,7 +143,16 @@ function getStoredRagToken() {
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit) {
-    const response = await fetch(`${API_BASE_URL}${path}`, init);
+    let response: Response;
+
+    try {
+        response = await fetch(`${API_BASE_URL}${path}`, init);
+    } catch {
+        throw new Error(
+            "No se pudo conectar con el backend RAG. Revisa CORS en Azure Functions para permitir este dominio de Vercel.",
+        );
+    }
+
     const data = (await response.json().catch(() => ({
         ok: false,
         error: "Respuesta no valida del backend.",
