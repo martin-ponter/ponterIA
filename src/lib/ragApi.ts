@@ -49,19 +49,35 @@ export async function initRagAuth() {
         domain: auth.domain,
         clientEndpoint: auth.client_endpoint,
     });
-    const response = await fetchJson<ExchangeResponse>(
-        "/auth/bitrix/exchange",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
+
+    let response: ExchangeResponse;
+
+    try {
+        response = await fetchJson<ExchangeResponse>(
+            "/auth/bitrix/exchange",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    accessToken: auth.access_token,
+                    domain: bitrixDomain,
+                }),
             },
-            body: JSON.stringify({
-                accessToken: auth.access_token,
-                domain: bitrixDomain,
-            }),
-        },
-    );
+        );
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === "Bitrix domain is not allowed"
+        ) {
+            throw new Error(
+                `Bitrix domain is not allowed: ${bitrixDomain}`,
+            );
+        }
+
+        throw error;
+    }
 
     sessionStorage.setItem(RAG_TOKEN_STORAGE_KEY, response.accessToken);
 
