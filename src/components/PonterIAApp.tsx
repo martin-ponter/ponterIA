@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-    getBitrixUserDisplayName,
-    getBitrixUserInitials,
-    getCurrentBitrixUser,
+    askRag,
+    getRagUserDisplayName,
+    getRagUserInitials,
+    initRagAuth,
+    isRagAuthError,
+} from "../lib/ragApi";
+import {
     validateBitrixAppAccess,
 } from "../lib/bitrix";
 
@@ -16,6 +20,12 @@ type ChatItem = {
 type QuickTag = {
     id: string;
     label: string;
+};
+
+type RagChatMessage = {
+    id: number;
+    role: "user" | "assistant";
+    content: string;
 };
 
 const mockChats: ChatItem[] = [
@@ -114,6 +124,9 @@ export default function PonterIAApp() {
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState("");
     const [message, setMessage] = useState("");
+    const [ragMessages, setRagMessages] = useState<RagChatMessage[]>([]);
+    const [chatError, setChatError] = useState("");
+    const [sendingMessage, setSendingMessage] = useState(false);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
 
@@ -146,19 +159,19 @@ export default function PonterIAApp() {
             }
 
             try {
-                const user = await getCurrentBitrixUser();
+                const user = await initRagAuth();
 
                 if (cancelled) return;
 
-                const label = getBitrixUserDisplayName(user);
+                const label = getRagUserDisplayName(user);
 
                 setBitrixUser({
-                    status: label ? "ready" : "error",
-                    label: label || "Usuario de Bitrix no disponible",
-                    initials: getBitrixUserInitials(label),
-                    avatarUrl: user.PERSONAL_PHOTO || "",
+                    status: "ready",
+                    label,
+                    initials: getRagUserInitials(label),
+                    avatarUrl: "",
                 });
-            } catch {
+            } catch (error) {
                 if (cancelled) return;
 
                 setBitrixUser({
@@ -167,6 +180,11 @@ export default function PonterIAApp() {
                     initials: "BT",
                     avatarUrl: "",
                 });
+                setChatError(
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo autenticar con el RAG.",
+                );
             }
         }
 
@@ -203,6 +221,69 @@ export default function PonterIAApp() {
     function handleNewChat() {
         setActiveChatId(null);
         setMessage("");
+        setChatError("");
+        setRagMessages([]);
+    }
+
+    async function handleSendMessage() {
+        const cleanMessage = message.trim();
+
+        if (!cleanMessage || sendingMessage) return;
+
+        setMessage("");
+        setChatError("");
+        setSendingMessage(true);
+        setRagMessages((prev) => [
+            ...prev,
+            {
+                id: Date.now(),
+                role: "user",
+                content: cleanMessage,
+            },
+        ]);
+
+        try {
+            const answer = await sendRagMessageWithRefresh(cleanMessage);
+
+            setRagMessages((prev) => [
+                ...prev,
+                {
+                    id: Date.now() + 1,
+                    role: "assistant",
+                    content: answer,
+                },
+            ]);
+        } catch (error) {
+            setChatError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo enviar el mensaje.",
+            );
+        } finally {
+            setSendingMessage(false);
+        }
+    }
+
+    async function sendRagMessageWithRefresh(cleanMessage: string) {
+        try {
+            return await askRag(cleanMessage);
+        } catch (error) {
+            if (error instanceof Error && isRagAuthError(error.message)) {
+                const user = await initRagAuth();
+                const label = getRagUserDisplayName(user);
+
+                setBitrixUser({
+                    status: "ready",
+                    label,
+                    initials: getRagUserInitials(label),
+                    avatarUrl: "",
+                });
+
+                return askRag(cleanMessage);
+            }
+
+            throw error;
+        }
     }
 
     function toggleTag(tagId: string) {
@@ -458,12 +539,24 @@ export default function PonterIAApp() {
                                                     }
                                                     rows={3}
                                                     placeholder="Pregunta lo que quieras..."
+                                                    disabled={
+                                                        sendingMessage ||
+                                                        bitrixUser.status !==
+                                                            "ready"
+                                                    }
                                                     className="min-h-[88px] w-full resize-none rounded-[24px] border border-slate-200 bg-white px-5 py-4 pr-14 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 sm:text-base"
                                                 />
 
                                                 <button
                                                     type="button"
-                                                    className="absolute bottom-3 right-3 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#69daa3]/40 bg-[#69daa3]/15 text-[#2f8d69] transition hover:border-[#69daa3]/70 hover:bg-[#69daa3]/25"
+                                                    onClick={handleSendMessage}
+                                                    disabled={
+                                                        sendingMessage ||
+                                                        !message.trim() ||
+                                                        bitrixUser.status !==
+                                                            "ready"
+                                                    }
+                                                    className="absolute bottom-3 right-3 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#69daa3]/40 bg-[#69daa3]/15 text-[#2f8d69] transition hover:border-[#69daa3]/70 hover:bg-[#69daa3]/25 disabled:cursor-not-allowed disabled:opacity-45"
                                                     aria-label="Enviar"
                                                     title="Enviar"
                                                 >
@@ -471,6 +564,39 @@ export default function PonterIAApp() {
                                                 </button>
                                             </div>
                                         </div>
+
+                                        {(ragMessages.length > 0 ||
+                                            chatError ||
+                                            sendingMessage) && (
+                                            <div className="max-h-64 space-y-3 overflow-y-auto px-1 py-1">
+                                                {ragMessages.map((item) => (
+                                                    <div
+                                                        key={item.id}
+                                                        className={[
+                                                            "rounded-2xl border px-4 py-3 text-sm leading-6",
+                                                            item.role ===
+                                                            "user"
+                                                                ? "ml-auto max-w-[82%] border-[#69daa3]/30 bg-[#69daa3]/10 text-slate-800"
+                                                                : "mr-auto max-w-[88%] border-slate-200 bg-white text-slate-700",
+                                                        ].join(" ")}
+                                                    >
+                                                        {item.content}
+                                                    </div>
+                                                ))}
+
+                                                {sendingMessage && (
+                                                    <div className="mr-auto max-w-[88%] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-500">
+                                                        Consultando Ponter IA...
+                                                    </div>
+                                                )}
+
+                                                {chatError && (
+                                                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+                                                        {chatError}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         <div className="flex flex-wrap gap-2 pt-1">
                                             {quickTags.map((tag) => {

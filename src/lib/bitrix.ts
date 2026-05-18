@@ -7,6 +7,15 @@ export type BitrixUser = {
     PERSONAL_PHOTO?: string;
 };
 
+export type BitrixAuth = {
+    access_token: string;
+    client_endpoint: string;
+    domain?: string;
+    expires_in?: number;
+    member_id?: string;
+    refresh_token?: string;
+};
+
 export type BitrixAccessResult =
     | { allowed: true; mode: "bitrix" | "direct-dev" }
     | { allowed: false; reason: string };
@@ -20,6 +29,7 @@ type BitrixMethodResult<T> = {
 type BitrixSdk = {
     init: (callback?: () => void) => void;
     installFinish: () => void;
+    getAuth: () => BitrixAuth;
     callMethod: <T>(
         method: string,
         params: Record<string, unknown>,
@@ -50,10 +60,7 @@ let sdkLoadPromise: Promise<BitrixSdk> | null = null;
 let initPromise: Promise<BitrixSdk> | null = null;
 
 export function isDirectAccessAllowed() {
-    return (
-        import.meta.env.PUBLIC_ALLOW_DIRECT_ACCESS === "true" ||
-        import.meta.env.DEV
-    );
+    return import.meta.env.PUBLIC_ALLOW_DIRECT_ACCESS === "true";
 }
 
 export function isInsideIframe() {
@@ -129,6 +136,17 @@ export async function initializeBitrix() {
     });
 
     return initPromise;
+}
+
+export async function getBitrixAuth() {
+    const bx24 = await initializeBitrix();
+    const auth = bx24.getAuth();
+
+    if (!auth?.access_token) {
+        throw new Error("Bitrix24 no ha devuelto un token OAuth valido.");
+    }
+
+    return auth;
 }
 
 export async function getCurrentBitrixUser() {
