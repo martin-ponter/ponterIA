@@ -1,4 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+    getBitrixUserDisplayName,
+    getBitrixUserInitials,
+    getCurrentBitrixUser,
+    validateBitrixAppAccess,
+} from "../lib/bitrix";
 
 type ChatItem = {
     id: number;
@@ -84,19 +90,92 @@ const quickTags: QuickTag[] = [
     { id: "onboarding", label: "Onboarding" },
 ];
 
-const mockUser = {
-    name: "Current User",
-    initials: "CU",
-    avatarUrl: "",
-};
+type AccessState =
+    | { status: "checking" }
+    | { status: "allowed" }
+    | { status: "blocked"; reason: string };
+
+type BitrixUserState =
+    | { status: "loading"; label: string; initials: string; avatarUrl: string }
+    | { status: "ready"; label: string; initials: string; avatarUrl: string }
+    | { status: "error"; label: string; initials: string; avatarUrl: string };
 
 export default function PonterIAApp() {
+    const [accessState, setAccessState] = useState<AccessState>({
+        status: "checking",
+    });
+    const [bitrixUser, setBitrixUser] = useState<BitrixUserState>({
+        status: "loading",
+        label: "Cargando usuario...",
+        initials: "...",
+        avatarUrl: "",
+    });
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchValue, setSearchValue] = useState("");
     const [message, setMessage] = useState("");
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function bootBitrix() {
+            const access = await validateBitrixAppAccess();
+
+            if (cancelled) return;
+
+            if (!access.allowed) {
+                setAccessState({
+                    status: "blocked",
+                    reason: access.reason,
+                });
+                return;
+            }
+
+            setAccessState({ status: "allowed" });
+
+            if (access.mode === "direct-dev") {
+                setBitrixUser({
+                    status: "error",
+                    label: "Usuario de Bitrix no disponible",
+                    initials: "BT",
+                    avatarUrl: "",
+                });
+                return;
+            }
+
+            try {
+                const user = await getCurrentBitrixUser();
+
+                if (cancelled) return;
+
+                const label = getBitrixUserDisplayName(user);
+
+                setBitrixUser({
+                    status: label ? "ready" : "error",
+                    label: label || "Usuario de Bitrix no disponible",
+                    initials: getBitrixUserInitials(label),
+                    avatarUrl: user.PERSONAL_PHOTO || "",
+                });
+            } catch {
+                if (cancelled) return;
+
+                setBitrixUser({
+                    status: "error",
+                    label: "Usuario de Bitrix no disponible",
+                    initials: "BT",
+                    avatarUrl: "",
+                });
+            }
+        }
+
+        bootBitrix();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const filteredChats = useMemo(() => {
         const term = searchValue.trim().toLowerCase();
@@ -131,6 +210,19 @@ export default function PonterIAApp() {
             prev.includes(tagId)
                 ? prev.filter((item) => item !== tagId)
                 : [...prev, tagId],
+        );
+    }
+
+    if (accessState.status === "checking") {
+        return <CenteredStatus message="Conectando con Bitrix24..." />;
+    }
+
+    if (accessState.status === "blocked") {
+        return (
+            <CenteredStatus
+                message="Esta aplicacion solo puede abrirse desde Bitrix24."
+                detail={accessState.reason}
+            />
         );
     }
 
@@ -317,15 +409,17 @@ export default function PonterIAApp() {
                     <div className="relative z-10 flex items-center justify-end gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-6 lg:px-8">
                         <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-md">
                             <Avatar
-                                avatarUrl={mockUser.avatarUrl}
-                                initials={mockUser.initials}
+                                avatarUrl={bitrixUser.avatarUrl}
+                                initials={bitrixUser.initials}
                             />
                             <div className="hidden text-right sm:block">
                                 <p className="text-sm font-medium text-slate-900">
-                                    {mockUser.name}
+                                    {bitrixUser.label}
                                 </p>
                                 <p className="text-xs text-slate-500">
-                                    Usuario actual
+                                    {bitrixUser.status === "loading"
+                                        ? "Conectando con Bitrix24"
+                                        : "Usuario actual"}
                                 </p>
                             </div>
                         </div>
@@ -412,6 +506,36 @@ export default function PonterIAApp() {
                 </main>
             </div>
         </div>
+    );
+}
+
+function CenteredStatus({
+    message,
+    detail,
+}: {
+    message: string;
+    detail?: string;
+}) {
+    return (
+        <main className="flex h-screen w-screen items-center justify-center bg-[#edf6f1] px-6 text-slate-900">
+            <section className="w-full max-w-md rounded-[28px] border border-white/70 bg-white/80 p-8 text-center shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-xl">
+                <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full border border-[#69daa3]/35 bg-[#69daa3]/15">
+                    <img
+                        src="/LogoPonter_Verde.png"
+                        alt="Logo Ponter"
+                        className="h-9 w-9 object-contain"
+                    />
+                </div>
+                <h1 className="text-xl font-semibold text-slate-950">
+                    {message}
+                </h1>
+                {detail && detail !== message && (
+                    <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {detail}
+                    </p>
+                )}
+            </section>
+        </main>
     );
 }
 
