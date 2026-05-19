@@ -264,7 +264,9 @@ export default function PonterIAApp() {
     async function handleSendMessage() {
         const cleanMessage = message.trim();
 
-        if (!cleanMessage || sendingMessage) return;
+        if (!cleanMessage || sendingMessage || bitrixUser.status !== "ready") {
+            return;
+        }
 
         setMessage("");
         setChatError("");
@@ -303,6 +305,15 @@ export default function PonterIAApp() {
         } finally {
             setSendingMessage(false);
         }
+    }
+
+    function handleMessageKeyDown(
+        event: React.KeyboardEvent<HTMLTextAreaElement>,
+    ) {
+        if (event.key !== "Enter" || event.shiftKey) return;
+
+        event.preventDefault();
+        void handleSendMessage();
     }
 
     async function sendRagMessageWithRefresh(cleanMessage: string) {
@@ -438,15 +449,6 @@ export default function PonterIAApp() {
                                 active={searchOpen}
                             />
 
-                            <SidebarActionButton
-                                collapsed={!sidebarOpen}
-                                icon={<HistoryIcon />}
-                                label="Últimos chats"
-                                onClick={() => {
-                                    setSidebarOpen(true);
-                                    setSearchOpen(false);
-                                }}
-                            />
                         </nav>
 
                         {sidebarOpen && searchOpen && (
@@ -642,10 +644,9 @@ export default function PonterIAApp() {
 
                             <div
                                 className={[
-                                    "mx-auto max-w-4xl",
                                     chatStarted
-                                        ? "w-full shrink-0 pb-1"
-                                        : "",
+                                        ? "w-full shrink-0 px-1 pb-1 sm:px-2"
+                                        : "mx-auto max-w-4xl",
                                 ].join(" ")}
                             >
                                 <div className="main-composer rounded-[30px] border border-white/60 bg-white/72 p-3 shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-2xl">
@@ -658,6 +659,9 @@ export default function PonterIAApp() {
                                                         setMessage(
                                                             e.target.value,
                                                         )
+                                                    }
+                                                    onKeyDown={
+                                                        handleMessageKeyDown
                                                     }
                                                     rows={3}
                                                     placeholder="Pregunta lo que quieras..."
@@ -1059,29 +1063,6 @@ function SearchIcon({ small = false }: { small?: boolean }) {
         >
             <circle cx="11" cy="11" r="6.5" />
             <path d="M16 16l4 4" strokeLinecap="round" />
-        </svg>
-    );
-}
-
-function HistoryIcon() {
-    return (
-        <svg
-            viewBox="0 0 24 24"
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-        >
-            <path
-                d="M4 12a8 8 0 108-8 8.5 8.5 0 00-6 2.5"
-                strokeLinecap="round"
-            />
-            <path d="M4 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
-            <path
-                d="M12 8v4l2.5 2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
         </svg>
     );
 }
