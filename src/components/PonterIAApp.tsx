@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
     askRag,
     getRagUserDisplayName,
@@ -29,6 +29,7 @@ type RagChatMessage = {
     id: number;
     role: "user" | "assistant";
     content: string;
+    createdAt: number;
 };
 
 const mockChats: ChatItem[] = [
@@ -132,6 +133,8 @@ export default function PonterIAApp() {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
+    const chatThreadRef = useRef<HTMLDivElement | null>(null);
+    const chatStarted = ragMessages.length > 0 || sendingMessage;
 
     useEffect(() => {
         let cancelled = false;
@@ -221,6 +224,12 @@ export default function PonterIAApp() {
         };
     }, []);
 
+    useEffect(() => {
+        if (!chatThreadRef.current) return;
+
+        chatThreadRef.current.scrollTop = chatThreadRef.current.scrollHeight;
+    }, [ragMessages, sendingMessage, chatError]);
+
     const filteredChats = useMemo(() => {
         const term = searchValue.trim().toLowerCase();
 
@@ -249,6 +258,7 @@ export default function PonterIAApp() {
         setMessage("");
         setChatError("");
         setRagMessages([]);
+        setSelectedTags([]);
     }
 
     async function handleSendMessage() {
@@ -259,24 +269,29 @@ export default function PonterIAApp() {
         setMessage("");
         setChatError("");
         setSendingMessage(true);
+        const userMessageTimestamp = Date.now();
+
         setRagMessages((prev) => [
             ...prev,
             {
-                id: Date.now(),
+                id: userMessageTimestamp,
                 role: "user",
                 content: cleanMessage,
+                createdAt: userMessageTimestamp,
             },
         ]);
 
         try {
             const answer = await sendRagMessageWithRefresh(cleanMessage);
+            const assistantMessageTimestamp = Date.now();
 
             setRagMessages((prev) => [
                 ...prev,
                 {
-                    id: Date.now() + 1,
+                    id: assistantMessageTimestamp,
                     role: "assistant",
                     content: answer,
+                    createdAt: assistantMessageTimestamp,
                 },
             ]);
         } catch (error) {
@@ -334,7 +349,7 @@ export default function PonterIAApp() {
     }
 
     return (
-        <div className="h-screen w-screen overflow-hidden bg-[#edf6f1] text-slate-900">
+        <div className="h-dvh w-screen overflow-hidden bg-[#edf6f1] text-slate-900">
             <div className="flex h-full w-full">
                 <aside
                     className={[
@@ -510,10 +525,10 @@ export default function PonterIAApp() {
                     </div>
                 </aside>
 
-                <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f7fbf8]">
+                <main className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#f7fbf8]">
                     <AuroraBackground />
 
-                    <div className="relative z-10 flex items-center justify-end gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-6 lg:px-8">
+                    <div className="main-topbar relative z-10 flex shrink-0 items-center justify-end gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-6 lg:px-8">
                         <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white/85 px-3 py-2 shadow-sm backdrop-blur-md">
                             <Avatar
                                 avatarUrl={bitrixUser.avatarUrl}
@@ -532,27 +547,108 @@ export default function PonterIAApp() {
                         </div>
                     </div>
 
-                    <div className="relative z-10 flex flex-1 items-center justify-center px-4 py-8 sm:px-6 lg:px-10">
-                        <div className="w-full max-w-5xl">
-                            <div className="mx-auto mb-8 max-w-3xl text-center">
-                                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#69daa3]/35 bg-white/75 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2f8d69] shadow-sm backdrop-blur-md">
+                    <div
+                        className={[
+                            "main-stage ponter-scrollbar relative z-10 flex min-h-0 flex-1 justify-center overflow-y-auto px-4 py-8 sm:px-6 lg:px-10",
+                            chatStarted
+                                ? "main-stage-chat items-stretch"
+                                : "items-center",
+                        ].join(" ")}
+                    >
+                        <div
+                            className={[
+                                "main-content w-full max-w-5xl",
+                                chatStarted
+                                    ? "flex h-full min-h-0 flex-col"
+                                    : "",
+                            ].join(" ")}
+                        >
+                            {!chatStarted && (
+                            <div className="main-hero mx-auto mb-8 max-w-3xl text-center">
+                                <div className="main-kicker mb-4 inline-flex items-center gap-2 rounded-full border border-[#69daa3]/35 bg-white/75 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2f8d69] shadow-sm backdrop-blur-md">
                                     <span className="h-2 w-2 rounded-full bg-[#69daa3]" />
                                     Ponter IA
                                 </div>
 
-                                <h1 className="text-balance text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl lg:text-6xl">
+                                <h1 className="main-title text-balance text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl lg:text-6xl">
                                     ¿En qué te puedo ayudar hoy?
                                 </h1>
 
-                                <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                                <p className="main-subtitle mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
                                     Resuelve dudas internas, consulta
                                     procedimientos, encuentra responsables y
                                     prepara mejor cada consulta de cliente.
                                 </p>
                             </div>
+                            )}
 
-                            <div className="mx-auto max-w-4xl">
-                                <div className="rounded-[30px] border border-white/60 bg-white/72 p-3 shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-2xl">
+                            {chatStarted && (
+                                <div
+                                    ref={chatThreadRef}
+                                    className="chat-thread ponter-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-4 pt-1 sm:px-2"
+                                >
+                                    {ragMessages.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className={[
+                                                "flex",
+                                                item.role === "user"
+                                                    ? "justify-end"
+                                                    : "justify-start",
+                                            ].join(" ")}
+                                        >
+                                            <div
+                                                className={[
+                                                    "max-w-[86%] rounded-2xl border px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[74%]",
+                                                    item.role === "user"
+                                                        ? "border-[#69daa3]/30 bg-[#69daa3]/14 text-slate-800"
+                                                        : "border-slate-200 bg-white/90 text-slate-700",
+                                                ].join(" ")}
+                                            >
+                                                <p className="whitespace-pre-wrap">
+                                                    {item.content}
+                                                </p>
+                                                <p
+                                                    className={[
+                                                        "mt-2 text-right text-[10px] leading-none text-slate-400",
+                                                        item.role === "user"
+                                                            ? "text-[#2f8d69]/70"
+                                                            : "",
+                                                    ].join(" ")}
+                                                >
+                                                    {formatMessageTimestamp(
+                                                        item.createdAt,
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    {sendingMessage && (
+                                        <div className="flex justify-start">
+                                            <div className="max-w-[86%] rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm leading-6 text-slate-500 shadow-sm sm:max-w-[74%]">
+                                                Consultando Ponter IA...
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {chatError && (
+                                        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+                                            {chatError}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div
+                                className={[
+                                    "mx-auto max-w-4xl",
+                                    chatStarted
+                                        ? "w-full shrink-0 pb-1"
+                                        : "",
+                                ].join(" ")}
+                            >
+                                <div className="main-composer rounded-[30px] border border-white/60 bg-white/72 p-3 shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-2xl">
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-stretch gap-3">
                                             <div className="relative flex-1">
@@ -570,7 +666,7 @@ export default function PonterIAApp() {
                                                         bitrixUser.status !==
                                                             "ready"
                                                     }
-                                                    className="min-h-[88px] w-full resize-none rounded-[24px] border border-slate-200 bg-white px-5 py-4 pr-14 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 sm:text-base"
+                                                    className="main-textarea min-h-[88px] w-full resize-none rounded-[24px] border border-slate-200 bg-white px-5 py-4 pr-14 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 sm:text-base"
                                                 />
 
                                                 <button
@@ -591,40 +687,14 @@ export default function PonterIAApp() {
                                             </div>
                                         </div>
 
-                                        {(ragMessages.length > 0 ||
-                                            chatError ||
-                                            sendingMessage) && (
-                                            <div className="max-h-64 space-y-3 overflow-y-auto px-1 py-1">
-                                                {ragMessages.map((item) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className={[
-                                                            "rounded-2xl border px-4 py-3 text-sm leading-6",
-                                                            item.role ===
-                                                            "user"
-                                                                ? "ml-auto max-w-[82%] border-[#69daa3]/30 bg-[#69daa3]/10 text-slate-800"
-                                                                : "mr-auto max-w-[88%] border-slate-200 bg-white text-slate-700",
-                                                        ].join(" ")}
-                                                    >
-                                                        {item.content}
-                                                    </div>
-                                                ))}
-
-                                                {sendingMessage && (
-                                                    <div className="mr-auto max-w-[88%] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-500">
-                                                        Consultando Ponter IA...
-                                                    </div>
-                                                )}
-
-                                                {chatError && (
-                                                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
-                                                        {chatError}
-                                                    </div>
-                                                )}
+                                        {chatError && !chatStarted && (
+                                            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-700">
+                                                {chatError}
                                             </div>
                                         )}
 
-                                        <div className="flex flex-wrap gap-2 pt-1">
+                                        {!chatStarted && (
+                                        <div className="main-tags flex flex-wrap gap-2 pt-1">
                                             {quickTags.map((tag) => {
                                                 const active =
                                                     selectedTags.includes(
@@ -650,6 +720,7 @@ export default function PonterIAApp() {
                                                 );
                                             })}
                                         </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -659,6 +730,16 @@ export default function PonterIAApp() {
             </div>
         </div>
     );
+}
+
+function formatMessageTimestamp(timestamp: number) {
+    return new Intl.DateTimeFormat("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(new Date(timestamp));
 }
 
 function CenteredStatus({

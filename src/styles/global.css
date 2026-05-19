@@ -70,6 +70,135 @@ textarea {
     background: transparent;
 }
 
+.main-stage {
+    overscroll-behavior: contain;
+}
+
+.main-stage-chat {
+    overflow: hidden;
+}
+
+.main-content {
+    padding-block: 0.25rem;
+}
+
+.main-title {
+    font-size: clamp(2rem, 5.2vw, 3.75rem);
+    line-height: 1.04;
+}
+
+.chat-thread {
+    scrollbar-width: thin;
+    scrollbar-color: #69daa3 transparent;
+}
+
+@media (max-width: 640px) {
+    .main-title {
+        font-size: clamp(1.65rem, 9vw, 2.25rem);
+        line-height: 1.08;
+    }
+
+    .main-subtitle {
+        font-size: 0.875rem;
+        line-height: 1.55;
+    }
+
+    .main-tags {
+        gap: 0.375rem;
+    }
+
+    .main-tags button {
+        padding: 0.4rem 0.65rem;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-height: 760px) {
+    .main-topbar {
+        padding-block: 0.625rem;
+    }
+
+    .main-stage {
+        align-items: flex-start;
+        padding-block: clamp(0.75rem, 2vh, 1.25rem);
+    }
+
+    .main-stage-chat {
+        align-items: stretch;
+    }
+
+    .main-hero {
+        margin-bottom: 1rem;
+    }
+
+    .main-kicker {
+        margin-bottom: 0.75rem;
+        padding-block: 0.4rem;
+        font-size: 0.68rem;
+    }
+
+    .main-title {
+        font-size: clamp(1.75rem, 6vh, 3rem);
+        line-height: 1.06;
+    }
+
+    .main-subtitle {
+        margin-top: 0.75rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    .main-composer {
+        border-radius: 1.5rem;
+        padding: 0.625rem;
+    }
+
+    .main-textarea {
+        min-height: 4.75rem;
+        padding-block: 0.85rem;
+    }
+
+}
+
+@media (max-height: 620px) {
+    .main-topbar {
+        padding-block: 0.5rem;
+    }
+
+    .main-stage {
+        padding-block: 0.625rem;
+    }
+
+    .main-stage-chat {
+        align-items: stretch;
+    }
+
+    .main-hero {
+        margin-bottom: 0.75rem;
+    }
+
+    .main-kicker {
+        margin-bottom: 0.5rem;
+        padding: 0.3rem 0.75rem;
+    }
+
+    .main-title {
+        font-size: clamp(1.5rem, 5.8vh, 2.25rem);
+    }
+
+    .main-subtitle {
+        display: none;
+    }
+
+    .main-textarea {
+        min-height: 4rem;
+    }
+
+    .main-tags button {
+        padding-block: 0.35rem;
+    }
+}
+
 @media (max-width: 1023px) {
     .ponter-scrollbar {
         scrollbar-width: none;
