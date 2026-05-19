@@ -5,6 +5,7 @@ import {
     getRagUserInitials,
     initRagAuth,
     isRagAuthError,
+    type RagSource,
 } from "../lib/ragApi";
 import {
     getBitrixUserDisplayName,
@@ -30,6 +31,7 @@ type RagChatMessage = {
     role: "user" | "assistant";
     content: string;
     createdAt: number;
+    sources?: RagSource[];
 };
 
 const mockChats: ChatItem[] = [
@@ -133,6 +135,7 @@ export default function PonterIAApp() {
     const [sendingMessage, setSendingMessage] = useState(false);
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
+    const [conversationId, setConversationId] = useState<number | null>(null);
     const chatThreadRef = useRef<HTMLDivElement | null>(null);
     const chatStarted = ragMessages.length > 0 || sendingMessage;
 
@@ -259,6 +262,7 @@ export default function PonterIAApp() {
         setChatError("");
         setRagMessages([]);
         setSelectedTags([]);
+        setConversationId(null);
     }
 
     async function handleSendMessage() {
@@ -284,16 +288,23 @@ export default function PonterIAApp() {
         ]);
 
         try {
-            const answer = await sendRagMessageWithRefresh(cleanMessage);
+            const ragAnswer = await sendRagMessageWithRefresh(cleanMessage);
             const assistantMessageTimestamp = Date.now();
+
+            if (typeof ragAnswer.conversationId === "number") {
+                setConversationId(ragAnswer.conversationId);
+            }
 
             setRagMessages((prev) => [
                 ...prev,
                 {
-                    id: assistantMessageTimestamp,
+                    id:
+                        ragAnswer.assistantMessageId ??
+                        assistantMessageTimestamp,
                     role: "assistant",
-                    content: answer,
+                    content: ragAnswer.answer,
                     createdAt: assistantMessageTimestamp,
+                    sources: ragAnswer.sources || [],
                 },
             ]);
         } catch (error) {
@@ -318,7 +329,11 @@ export default function PonterIAApp() {
 
     async function sendRagMessageWithRefresh(cleanMessage: string) {
         try {
-            return await askRag(cleanMessage);
+            return await askRag({
+                message: cleanMessage,
+                areaSlug: "general",
+                conversationId,
+            });
         } catch (error) {
             if (error instanceof Error && isRagAuthError(error.message)) {
                 const user = await initRagAuth();
@@ -331,7 +346,11 @@ export default function PonterIAApp() {
                     avatarUrl: prev.avatarUrl,
                 }));
 
-                return askRag(cleanMessage);
+                return askRag({
+                    message: cleanMessage,
+                    areaSlug: "general",
+                    conversationId,
+                });
             }
 
             throw error;
@@ -610,6 +629,15 @@ export default function PonterIAApp() {
                                                 <p className="whitespace-pre-wrap">
                                                     {item.content}
                                                 </p>
+                                                {item.role === "assistant" &&
+                                                    item.sources &&
+                                                    item.sources.length > 0 && (
+                                                        <SourceList
+                                                            sources={
+                                                                item.sources
+                                                            }
+                                                        />
+                                                    )}
                                                 <p
                                                     className={[
                                                         "mt-2 text-right text-[10px] leading-none text-slate-400",
@@ -744,6 +772,66 @@ function formatMessageTimestamp(timestamp: number) {
         hour: "2-digit",
         minute: "2-digit",
     }).format(new Date(timestamp));
+}
+
+function SourceList({ sources }: { sources: RagSource[] }) {
+    return (
+        <div className="mt-3 space-y-2 border-t border-slate-200/80 pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Fuentes
+            </p>
+
+            {sources.map((source, index) => (
+                <div
+                    key={`${source.documentId ?? "source"}-${source.chunkId ?? index}`}
+                    className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2"
+                >
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                            <p className="truncate text-xs font-semibold text-slate-700">
+                                {source.documentTitle ||
+                                    source.fileName ||
+                                    "Documento RAG"}
+                            </p>
+                            {source.fileName && (
+                                <p className="mt-0.5 truncate text-[11px] text-slate-500">
+                                    {source.fileName}
+                                </p>
+                            )}
+                        </div>
+
+                        <span className="shrink-0 text-[10px] text-slate-400">
+                            {formatSourceMeta(source)}
+                        </span>
+                    </div>
+
+                    {source.preview && (
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">
+                            {source.preview}
+                        </p>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function formatSourceMeta(source: RagSource) {
+    const location =
+        source.pageStart && source.pageEnd
+            ? source.pageStart === source.pageEnd
+                ? `p. ${source.pageStart}`
+                : `pp. ${source.pageStart}-${source.pageEnd}`
+            : source.pageStart
+              ? `p. ${source.pageStart}`
+              : "";
+
+    const score =
+        typeof source.similarityScore === "number"
+            ? `${Math.round(source.similarityScore * 100)}%`
+            : "";
+
+    return [location, score].filter(Boolean).join(" · ");
 }
 
 function CenteredStatus({

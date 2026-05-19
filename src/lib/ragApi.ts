@@ -10,12 +10,12 @@ export type RagUser = {
 };
 
 type ApiSuccess<T> = T & { ok: true };
-type ApiError = { ok: false; error?: string };
+type ApiError = { ok: false; error?: string; debug?: string };
 type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 type ExchangeResponse = {
-    tokenType: "Bearer";
-    accessToken: string;
+    token?: string;
+    accessToken?: string;
     expiresInMinutes: number;
     user: RagUser;
 };
@@ -24,9 +24,25 @@ type MeResponse = {
     user: RagUser;
 };
 
-type ChatResponse = {
+export type RagSource = {
+    rank?: number;
+    chunkId?: number;
+    documentId?: number;
+    documentTitle?: string;
+    fileName?: string;
+    areaSlug?: string;
+    pageStart?: number;
+    pageEnd?: number;
+    similarityScore?: number;
+    preview?: string;
+};
+
+export type RagChatResponse = {
+    conversationId?: number;
+    userMessageId?: number;
+    assistantMessageId?: number;
     answer: string;
-    receivedMessage?: string;
+    sources?: RagSource[];
     user?: RagUser;
 };
 
@@ -61,6 +77,7 @@ export async function initRagAuth() {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
+                    bitrixDomain,
                     accessToken: auth.access_token,
                     domain: bitrixDomain,
                 }),
@@ -79,7 +96,13 @@ export async function initRagAuth() {
         throw error;
     }
 
-    sessionStorage.setItem(RAG_TOKEN_STORAGE_KEY, response.accessToken);
+    const ragToken = response.token || response.accessToken;
+
+    if (!ragToken) {
+        throw new Error("El backend RAG no ha devuelto token de sesion.");
+    }
+
+    sessionStorage.setItem(RAG_TOKEN_STORAGE_KEY, ragToken);
 
     return response.user;
 }
@@ -101,20 +124,32 @@ export async function debugCurrentRagAuth() {
     };
 }
 
-export async function askRag(message: string) {
+export async function askRag({
+    message,
+    areaSlug = "general",
+    conversationId,
+}: {
+    message: string;
+    areaSlug?: string;
+    conversationId?: number | null;
+}) {
     const token = getStoredRagToken();
 
     try {
-        const data = await fetchJson<ChatResponse>("/chat", {
+        const data = await fetchJson<RagChatResponse>("/chat", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({
+                message,
+                areaSlug,
+                ...(conversationId ? { conversationId } : {}),
+            }),
         });
 
-        return data.answer;
+        return data;
     } catch (error) {
         if (error instanceof Error && isRagAuthError(error.message)) {
             sessionStorage.removeItem(RAG_TOKEN_STORAGE_KEY);
@@ -175,10 +210,20 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
     }))) as ApiResponse<T>;
 
     if (!response.ok || !data.ok) {
-        throw new Error(
+        const isDevelopment = import.meta.env.DEV;
+        const debugMessage =
+            isDevelopment && "debug" in data && data.debug
+                ? data.debug
+                : undefined;
+        const errorMessage =
             "error" in data && data.error
                 ? data.error
-                : "Error comunicando con el backend RAG.",
+                : "Error comunicando con el backend RAG.";
+
+        throw new Error(
+            response.status === 401
+                ? `RAG auth error: ${errorMessage}`
+                : debugMessage || errorMessage,
         );
     }
 
@@ -230,5 +275,16 @@ function getHostFromUrl(value?: string) {
 }
 
 export function isRagAuthError(error: string) {
-    return error === "RAG token expired" || error === "Invalid RAG token";
+    const normalizedError = error.toLowerCase();
+
+    return (
+        error === "RAG token expired" ||
+        error === "Invalid RAG token" ||
+        normalizedError.includes("rag auth error") ||
+        normalizedError.includes("token invalido") ||
+        normalizedError.includes("token inválido") ||
+        normalizedError.includes("token caducado") ||
+        normalizedError.includes("expired") ||
+        normalizedError.includes("invalid rag token")
+    );
 }
