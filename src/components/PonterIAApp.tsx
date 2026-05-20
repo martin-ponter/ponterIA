@@ -31,6 +31,10 @@ type RagChatMessage = {
 
 type ChatAreaSlug = "" | "fiscal" | "laboral";
 
+const CHAT_DRAFT_STORAGE_PREFIX = "PONTER_IA_CHAT_DRAFT";
+const CHAT_DRAFT_MAX_LENGTH = 8000;
+const CHAT_DRAFT_TTL_MS = 1000 * 60 * 60 * 24;
+
 const chatAreas: { value: ChatAreaSlug; label: string; activeLabel: string }[] =
     [
         {
@@ -137,8 +141,16 @@ export default function PonterIAApp() {
     const [selectedAreaSlug, setSelectedAreaSlug] =
         useState<ChatAreaSlug>("");
     const chatThreadRef = useRef<HTMLDivElement | null>(null);
+    const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const draftHydratedKeyRef = useRef("");
+    const suppressDraftRestoreKeyRef = useRef("");
+    const skipNextDraftWriteRef = useRef(false);
     const chatStarted = ragMessages.length > 0 || sendingMessage;
     const normalizedAreaSlug = normalizeChatAreaSlug(selectedAreaSlug);
+    const draftStorageKey = useMemo(
+        () => getChatDraftStorageKey(activeChatId, conversationId),
+        [activeChatId, conversationId],
+    );
 
     useEffect(() => {
         let cancelled = false;
@@ -234,6 +246,37 @@ export default function PonterIAApp() {
         chatThreadRef.current.scrollTop = chatThreadRef.current.scrollHeight;
     }, [ragMessages, sendingMessage, chatError]);
 
+    useEffect(() => {
+        draftHydratedKeyRef.current = draftStorageKey;
+        skipNextDraftWriteRef.current = true;
+
+        if (suppressDraftRestoreKeyRef.current === draftStorageKey) {
+            suppressDraftRestoreKeyRef.current = "";
+            removeChatDraft(draftStorageKey);
+            setMessage("");
+            return;
+        }
+
+        setMessage(readChatDraft(draftStorageKey));
+    }, [draftStorageKey]);
+
+    useEffect(() => {
+        if (draftHydratedKeyRef.current !== draftStorageKey) return;
+
+        if (skipNextDraftWriteRef.current) {
+            skipNextDraftWriteRef.current = false;
+            return;
+        }
+
+        writeChatDraft(draftStorageKey, message);
+    }, [draftStorageKey, message]);
+
+    useEffect(() => {
+        if (sendingMessage || bitrixUser.status !== "ready") return;
+
+        messageTextareaRef.current?.focus();
+    }, [sendingMessage, bitrixUser.status]);
+
     const filteredChats = useMemo(() => {
         const term = searchValue.trim().toLowerCase();
 
@@ -259,7 +302,6 @@ export default function PonterIAApp() {
 
     function handleNewChat() {
         setActiveChatId(null);
-        setMessage("");
         setChatError("");
         setRagMessages([]);
         setConversationId(null);
@@ -272,6 +314,7 @@ export default function PonterIAApp() {
             return;
         }
 
+        removeChatDraft(draftStorageKey);
         setMessage("");
         setChatError("");
         setSendingMessage(true);
@@ -292,6 +335,15 @@ export default function PonterIAApp() {
             const assistantMessageTimestamp = Date.now();
 
             if (typeof ragAnswer.conversationId === "number") {
+                const nextDraftStorageKey = getChatDraftStorageKey(
+                    activeChatId,
+                    ragAnswer.conversationId,
+                );
+
+                removeChatDraft(nextDraftStorageKey);
+                if (nextDraftStorageKey !== draftStorageKey) {
+                    suppressDraftRestoreKeyRef.current = nextDraftStorageKey;
+                }
                 setConversationId(ragAnswer.conversationId);
             }
 
@@ -315,6 +367,9 @@ export default function PonterIAApp() {
             );
         } finally {
             setSendingMessage(false);
+            requestAnimationFrame(() => {
+                messageTextareaRef.current?.focus();
+            });
         }
     }
 
@@ -669,6 +724,7 @@ export default function PonterIAApp() {
                                         <div className="flex items-stretch gap-3">
                                             <div className="relative flex-1">
                                                 <textarea
+                                                    ref={messageTextareaRef}
                                                     value={message}
                                                     onChange={(e) =>
                                                         setMessage(
@@ -765,6 +821,80 @@ export default function PonterIAApp() {
 
 function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
     return value === "fiscal" || value === "laboral" ? value : "";
+}
+
+function getChatDraftStorageKey(
+    activeChatId: number | null,
+    conversationId: number | null,
+) {
+    const scope =
+        activeChatId !== null
+            ? `chat:${activeChatId}`
+            : conversationId !== null
+              ? `conversation:${conversationId}`
+              : "new";
+
+    return `${CHAT_DRAFT_STORAGE_PREFIX}:${scope}`;
+}
+
+function readChatDraft(storageKey: string) {
+    try {
+        const rawDraft = sessionStorage.getItem(storageKey);
+
+        if (!rawDraft) return "";
+
+        const parsedDraft = JSON.parse(rawDraft) as {
+            value?: unknown;
+            updatedAt?: unknown;
+        };
+        const value =
+            typeof parsedDraft.value === "string" ? parsedDraft.value : "";
+        const updatedAt =
+            typeof parsedDraft.updatedAt === "number"
+                ? parsedDraft.updatedAt
+                : 0;
+
+        if (
+            !value.trim() ||
+            value.length > CHAT_DRAFT_MAX_LENGTH ||
+            Date.now() - updatedAt > CHAT_DRAFT_TTL_MS
+        ) {
+            sessionStorage.removeItem(storageKey);
+            return "";
+        }
+
+        return value;
+    } catch {
+        sessionStorage.removeItem(storageKey);
+        return "";
+    }
+}
+
+function writeChatDraft(storageKey: string, value: string) {
+    try {
+        if (!value.trim()) {
+            sessionStorage.removeItem(storageKey);
+            return;
+        }
+
+        sessionStorage.setItem(
+            storageKey,
+            JSON.stringify({
+                value: value.slice(0, CHAT_DRAFT_MAX_LENGTH),
+                updatedAt: Date.now(),
+            }),
+        );
+    } catch {
+        sessionStorage.removeItem(storageKey);
+    }
+}
+
+function removeChatDraft(storageKey: string) {
+    try {
+        sessionStorage.removeItem(storageKey);
+    } catch {
+        // Ignore storage failures; draft persistence is non-critical.
+    }
 }
 
 function MessageSources({ sources }: { sources?: RagSource[] }) {
