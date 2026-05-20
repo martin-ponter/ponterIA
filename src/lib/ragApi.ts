@@ -29,12 +29,21 @@ export type RagSource = {
     chunkId?: number;
     documentId?: number;
     documentTitle?: string;
+    title?: string;
+    source?: string;
     fileName?: string;
+    filename?: string;
+    url?: string;
+    path?: string;
     areaSlug?: string;
     pageStart?: number;
     pageEnd?: number;
+    page?: number;
     similarityScore?: number;
+    score?: number;
     preview?: string;
+    text?: string;
+    content?: string;
 };
 
 export type RagChatArea = {

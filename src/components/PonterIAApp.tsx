@@ -6,6 +6,7 @@ import {
     initRagAuth,
     isRagAuthError,
 } from "../lib/ragApi";
+import type { RagSource } from "../lib/ragApi";
 import {
     getBitrixUserDisplayName,
     getBitrixUserInitials,
@@ -20,16 +21,12 @@ type ChatItem = {
     updatedAt: string;
 };
 
-type QuickTag = {
-    id: string;
-    label: string;
-};
-
 type RagChatMessage = {
     id: number;
     role: "user" | "assistant";
     content: string;
     createdAt: number;
+    sources?: RagSource[];
 };
 
 type ChatAreaSlug = "" | "fiscal" | "laboral";
@@ -108,15 +105,6 @@ const mockChats: ChatItem[] = [
     },
 ];
 
-const quickTags: QuickTag[] = [
-    { id: "procedimientos", label: "Procedimientos" },
-    { id: "equipo", label: "Equipo" },
-    { id: "clientes", label: "Clientes" },
-    { id: "supervisores", label: "Supervisores" },
-    { id: "pricing", label: "Pricing" },
-    { id: "onboarding", label: "Onboarding" },
-];
-
 type AccessState =
     | { status: "checking" }
     | { status: "allowed" }
@@ -144,7 +132,6 @@ export default function PonterIAApp() {
     const [ragMessages, setRagMessages] = useState<RagChatMessage[]>([]);
     const [chatError, setChatError] = useState("");
     const [sendingMessage, setSendingMessage] = useState(false);
-    const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
     const [conversationId, setConversationId] = useState<number | null>(null);
     const [selectedAreaSlug, setSelectedAreaSlug] =
@@ -152,7 +139,6 @@ export default function PonterIAApp() {
     const chatThreadRef = useRef<HTMLDivElement | null>(null);
     const chatStarted = ragMessages.length > 0 || sendingMessage;
     const normalizedAreaSlug = normalizeChatAreaSlug(selectedAreaSlug);
-    const activeAreaLabel = getChatAreaLabel(normalizedAreaSlug);
 
     useEffect(() => {
         let cancelled = false;
@@ -276,7 +262,6 @@ export default function PonterIAApp() {
         setMessage("");
         setChatError("");
         setRagMessages([]);
-        setSelectedTags([]);
         setConversationId(null);
     }
 
@@ -319,6 +304,7 @@ export default function PonterIAApp() {
                     role: "assistant",
                     content: ragAnswer.answer,
                     createdAt: assistantMessageTimestamp,
+                    sources: ragAnswer.sources,
                 },
             ]);
         } catch (error) {
@@ -369,14 +355,6 @@ export default function PonterIAApp() {
 
             throw error;
         }
-    }
-
-    function toggleTag(tagId: string) {
-        setSelectedTags((prev) =>
-            prev.includes(tagId)
-                ? prev.filter((item) => item !== tagId)
-                : [...prev, tagId],
-        );
     }
 
     if (accessState.status === "checking") {
@@ -643,6 +621,11 @@ export default function PonterIAApp() {
                                                 <p className="whitespace-pre-wrap">
                                                     {item.content}
                                                 </p>
+                                                {item.role === "assistant" && (
+                                                    <MessageSources
+                                                        sources={item.sources}
+                                                    />
+                                                )}
                                                 <p
                                                     className={[
                                                         "mt-2 text-right text-[10px] leading-none text-slate-400",
@@ -684,47 +667,6 @@ export default function PonterIAApp() {
                             >
                                 <div className="main-composer rounded-[30px] border border-white/60 bg-white/72 p-3 shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-2xl">
                                     <div className="flex flex-col gap-3">
-                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 sm:flex-row sm:items-center sm:gap-3">
-                                                <span className="shrink-0">
-                                                    Área de consulta
-                                                </span>
-                                                <select
-                                                    value={selectedAreaSlug}
-                                                    onChange={(event) =>
-                                                        setSelectedAreaSlug(
-                                                            normalizeChatAreaSlug(
-                                                                event.target
-                                                                    .value,
-                                                            ),
-                                                        )
-                                                    }
-                                                    disabled={
-                                                        sendingMessage ||
-                                                        bitrixUser.status !==
-                                                            "ready"
-                                                    }
-                                                    className="h-10 rounded-full border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 disabled:cursor-not-allowed disabled:opacity-55"
-                                                >
-                                                    {chatAreas.map((area) => (
-                                                        <option
-                                                            key={
-                                                                area.value ||
-                                                                "all"
-                                                            }
-                                                            value={area.value}
-                                                        >
-                                                            {area.label}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </label>
-
-                                            <p className="text-xs font-medium text-slate-500">
-                                                Buscando en: {activeAreaLabel}
-                                            </p>
-                                        </div>
-
                                         <div className="flex items-stretch gap-3">
                                             <div className="relative flex-1">
                                                 <textarea
@@ -771,34 +713,49 @@ export default function PonterIAApp() {
                                             </div>
                                         )}
 
-                                        {!chatStarted && (
-                                        <div className="main-tags flex flex-wrap gap-2 pt-1">
-                                            {quickTags.map((tag) => {
+                                        <div className="main-tags flex flex-wrap items-center gap-2 pt-1">
+                                            <span className="mr-1 text-xs font-medium text-slate-500">
+                                                Buscando en:
+                                            </span>
+                                            {chatAreas.map((area) => {
                                                 const active =
-                                                    selectedTags.includes(
-                                                        tag.id,
-                                                    );
+                                                    normalizedAreaSlug ===
+                                                    area.value;
 
                                                 return (
                                                     <button
-                                                        key={tag.id}
+                                                        key={
+                                                            area.value || "all"
+                                                        }
                                                         type="button"
                                                         onClick={() =>
-                                                            toggleTag(tag.id)
+                                                            setSelectedAreaSlug(
+                                                                area.value,
+                                                            )
                                                         }
+                                                        disabled={
+                                                            sendingMessage ||
+                                                            bitrixUser.status !==
+                                                                "ready"
+                                                        }
+                                                        aria-pressed={active}
                                                         className={[
                                                             "rounded-full border px-4 py-2 text-xs font-medium transition sm:text-sm",
                                                             active
-                                                                ? "border-[#69daa3]/40 bg-[#69daa3]/14 text-[#2f8d69]"
+                                                                ? "border-[#69daa3]/50 bg-[#69daa3]/15 text-[#2f8d69]"
                                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
+                                                            sendingMessage ||
+                                                            bitrixUser.status !==
+                                                                "ready"
+                                                                ? "cursor-not-allowed opacity-55"
+                                                                : "",
                                                         ].join(" ")}
                                                     >
-                                                        {tag.label}
+                                                        {area.activeLabel}
                                                     </button>
                                                 );
                                             })}
                                         </div>
-                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -814,11 +771,76 @@ function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
     return value === "fiscal" || value === "laboral" ? value : "";
 }
 
-function getChatAreaLabel(value: ChatAreaSlug) {
+function MessageSources({ sources }: { sources?: RagSource[] }) {
+    if (!sources?.length) return null;
+
     return (
-        chatAreas.find((area) => area.value === value)?.activeLabel ||
-        chatAreas[0].activeLabel
+        <div className="mt-3 border-t border-slate-200 pt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                Fuentes
+            </p>
+            <div className="space-y-2">
+                {sources.map((source, index) => (
+                    <div
+                        key={`${source.chunkId ?? source.documentId ?? source.rank ?? index}-${index}`}
+                        className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2"
+                    >
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-700">
+                                {formatSourceTitle(source, index)}
+                            </span>
+                            {source.areaSlug && (
+                                <span className="rounded-full border border-[#69daa3]/30 bg-[#69daa3]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2f8d69]">
+                                    {source.areaSlug}
+                                </span>
+                            )}
+                            {formatSourcePages(source) && (
+                                <span className="text-[11px] text-slate-500">
+                                    {formatSourcePages(source)}
+                                </span>
+                            )}
+                        </div>
+                        {formatSourcePreview(source) && (
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
+                                {formatSourcePreview(source)}
+                            </p>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
     );
+}
+
+function formatSourceTitle(source: RagSource, index: number) {
+    return (
+        source.documentTitle ||
+        source.title ||
+        source.fileName ||
+        source.filename ||
+        source.source ||
+        source.url ||
+        source.path ||
+        `Fuente ${source.rank ?? index + 1}`
+    );
+}
+
+function formatSourcePages(source: RagSource) {
+    if (!source.pageStart && !source.pageEnd && !source.page) return "";
+
+    if (
+        source.pageStart &&
+        source.pageEnd &&
+        source.pageStart !== source.pageEnd
+    ) {
+        return `pags. ${source.pageStart}-${source.pageEnd}`;
+    }
+
+    return `pag. ${source.pageStart || source.pageEnd || source.page}`;
+}
+
+function formatSourcePreview(source: RagSource) {
+    return source.preview || source.text || source.content || "";
 }
 
 function formatMessageTimestamp(timestamp: number) {
