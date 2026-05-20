@@ -192,7 +192,7 @@ export default function PonterIAApp() {
                     ragAuthResult.status === "fulfilled"
                         ? getRagUserDisplayName(ragAuthResult.value)
                         : getBitrixUserDisplayName(bitrixUserResult.value) ||
-                          "Usuario de Bitrix no disponible";
+                        "Usuario de Bitrix no disponible";
                 const avatarUrl =
                     bitrixUserResult.status === "fulfilled"
                         ? bitrixUserResult.value.PERSONAL_PHOTO || ""
@@ -383,11 +383,10 @@ export default function PonterIAApp() {
                 >
                     <div className="flex h-full min-h-0 flex-col p-4 sm:p-5">
                         <div
-                            className={`mb-5 flex items-center ${
-                                sidebarOpen
+                            className={`mb-5 flex items-center ${sidebarOpen
                                     ? "justify-between"
                                     : "justify-center"
-                            }`}
+                                }`}
                         >
                             <button
                                 type="button"
@@ -577,22 +576,22 @@ export default function PonterIAApp() {
                             ].join(" ")}
                         >
                             {!chatStarted && (
-                            <div className="main-hero mx-auto mb-8 max-w-3xl text-center">
-                                <div className="main-kicker mb-4 inline-flex items-center gap-2 rounded-full border border-[#69daa3]/35 bg-white/75 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2f8d69] shadow-sm backdrop-blur-md">
-                                    <span className="h-2 w-2 rounded-full bg-[#69daa3]" />
-                                    Ponter IA
+                                <div className="main-hero mx-auto mb-8 max-w-3xl text-center">
+                                    <div className="main-kicker mb-4 inline-flex items-center gap-2 rounded-full border border-[#69daa3]/35 bg-white/75 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#2f8d69] shadow-sm backdrop-blur-md">
+                                        <span className="h-2 w-2 rounded-full bg-[#69daa3]" />
+                                        Ponter IA
+                                    </div>
+
+                                    <h1 className="main-title text-balance text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl lg:text-6xl">
+                                        ¿En qué te puedo ayudar hoy?
+                                    </h1>
+
+                                    <p className="main-subtitle mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                                        Resuelve dudas internas, consulta
+                                        procedimientos, encuentra responsables y
+                                        prepara mejor cada consulta de cliente.
+                                    </p>
                                 </div>
-
-                                <h1 className="main-title text-balance text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl lg:text-6xl">
-                                    ¿En qué te puedo ayudar hoy?
-                                </h1>
-
-                                <p className="main-subtitle mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
-                                    Resuelve dudas internas, consulta
-                                    procedimientos, encuentra responsables y
-                                    prepara mejor cada consulta de cliente.
-                                </p>
-                            </div>
                             )}
 
                             {chatStarted && (
@@ -684,7 +683,7 @@ export default function PonterIAApp() {
                                                     disabled={
                                                         sendingMessage ||
                                                         bitrixUser.status !==
-                                                            "ready"
+                                                        "ready"
                                                     }
                                                     className="main-textarea min-h-[88px] w-full resize-none rounded-[24px] border border-slate-200 bg-white px-5 py-4 pr-14 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 sm:text-base"
                                                 />
@@ -696,7 +695,7 @@ export default function PonterIAApp() {
                                                         sendingMessage ||
                                                         !message.trim() ||
                                                         bitrixUser.status !==
-                                                            "ready"
+                                                        "ready"
                                                     }
                                                     className="absolute bottom-3 right-3 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#69daa3]/40 bg-[#69daa3]/15 text-[#2f8d69] transition hover:border-[#69daa3]/70 hover:bg-[#69daa3]/25 disabled:cursor-not-allowed disabled:opacity-45"
                                                     aria-label="Enviar"
@@ -714,9 +713,6 @@ export default function PonterIAApp() {
                                         )}
 
                                         <div className="main-tags flex flex-wrap items-center gap-2 pt-1">
-                                            <span className="mr-1 text-xs font-medium text-slate-500">
-                                                Buscando en:
-                                            </span>
                                             {chatAreas.map((area) => {
                                                 const active =
                                                     normalizedAreaSlug ===
@@ -736,7 +732,7 @@ export default function PonterIAApp() {
                                                         disabled={
                                                             sendingMessage ||
                                                             bitrixUser.status !==
-                                                                "ready"
+                                                            "ready"
                                                         }
                                                         aria-pressed={active}
                                                         className={[
@@ -745,7 +741,7 @@ export default function PonterIAApp() {
                                                                 ? "border-[#69daa3]/50 bg-[#69daa3]/15 text-[#2f8d69]"
                                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
                                                             sendingMessage ||
-                                                            bitrixUser.status !==
+                                                                bitrixUser.status !==
                                                                 "ready"
                                                                 ? "cursor-not-allowed opacity-55"
                                                                 : "",
