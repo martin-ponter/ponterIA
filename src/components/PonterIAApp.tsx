@@ -32,6 +32,19 @@ type RagChatMessage = {
     createdAt: number;
 };
 
+type ChatAreaSlug = "" | "fiscal" | "laboral";
+
+const chatAreas: { value: ChatAreaSlug; label: string; activeLabel: string }[] =
+    [
+        {
+            value: "",
+            label: "General / Todas las áreas",
+            activeLabel: "Todas las áreas",
+        },
+        { value: "fiscal", label: "Fiscal", activeLabel: "Fiscal" },
+        { value: "laboral", label: "Laboral", activeLabel: "Laboral" },
+    ];
+
 const mockChats: ChatItem[] = [
     {
         id: 1,
@@ -134,8 +147,12 @@ export default function PonterIAApp() {
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
     const [activeChatId, setActiveChatId] = useState<number | null>(1);
     const [conversationId, setConversationId] = useState<number | null>(null);
+    const [selectedAreaSlug, setSelectedAreaSlug] =
+        useState<ChatAreaSlug>("");
     const chatThreadRef = useRef<HTMLDivElement | null>(null);
     const chatStarted = ragMessages.length > 0 || sendingMessage;
+    const normalizedAreaSlug = normalizeChatAreaSlug(selectedAreaSlug);
+    const activeAreaLabel = getChatAreaLabel(normalizedAreaSlug);
 
     useEffect(() => {
         let cancelled = false;
@@ -328,7 +345,7 @@ export default function PonterIAApp() {
         try {
             return await askRag({
                 message: cleanMessage,
-                areaSlug: "general",
+                areaSlug: normalizedAreaSlug,
                 conversationId,
             });
         } catch (error) {
@@ -345,7 +362,7 @@ export default function PonterIAApp() {
 
                 return askRag({
                     message: cleanMessage,
-                    areaSlug: "general",
+                    areaSlug: normalizedAreaSlug,
                     conversationId,
                 });
             }
@@ -667,6 +684,47 @@ export default function PonterIAApp() {
                             >
                                 <div className="main-composer rounded-[30px] border border-white/60 bg-white/72 p-3 shadow-[0_30px_80px_rgba(86,113,113,0.10)] backdrop-blur-2xl">
                                     <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600 sm:flex-row sm:items-center sm:gap-3">
+                                                <span className="shrink-0">
+                                                    Área de consulta
+                                                </span>
+                                                <select
+                                                    value={selectedAreaSlug}
+                                                    onChange={(event) =>
+                                                        setSelectedAreaSlug(
+                                                            normalizeChatAreaSlug(
+                                                                event.target
+                                                                    .value,
+                                                            ),
+                                                        )
+                                                    }
+                                                    disabled={
+                                                        sendingMessage ||
+                                                        bitrixUser.status !==
+                                                            "ready"
+                                                    }
+                                                    className="h-10 rounded-full border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 outline-none transition focus:border-[#69daa3] focus:ring-4 focus:ring-[#69daa3]/15 disabled:cursor-not-allowed disabled:opacity-55"
+                                                >
+                                                    {chatAreas.map((area) => (
+                                                        <option
+                                                            key={
+                                                                area.value ||
+                                                                "all"
+                                                            }
+                                                            value={area.value}
+                                                        >
+                                                            {area.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </label>
+
+                                            <p className="text-xs font-medium text-slate-500">
+                                                Buscando en: {activeAreaLabel}
+                                            </p>
+                                        </div>
+
                                         <div className="flex items-stretch gap-3">
                                             <div className="relative flex-1">
                                                 <textarea
@@ -749,6 +807,17 @@ export default function PonterIAApp() {
                 </main>
             </div>
         </div>
+    );
+}
+
+function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
+    return value === "fiscal" || value === "laboral" ? value : "";
+}
+
+function getChatAreaLabel(value: ChatAreaSlug) {
+    return (
+        chatAreas.find((area) => area.value === value)?.activeLabel ||
+        chatAreas[0].activeLabel
     );
 }
 

@@ -37,12 +37,19 @@ export type RagSource = {
     preview?: string;
 };
 
+export type RagChatArea = {
+    rawAreaSlug?: string | null;
+    effectiveAreaSlug?: string | null;
+    filterMode?: "all" | "specific";
+};
+
 export type RagChatResponse = {
     conversationId?: number;
     userMessageId?: number;
     assistantMessageId?: number;
     answer: string;
     sources?: RagSource[];
+    area?: RagChatArea;
     user?: RagUser;
 };
 
@@ -126,14 +133,15 @@ export async function debugCurrentRagAuth() {
 
 export async function askRag({
     message,
-    areaSlug = "general",
+    areaSlug = null,
     conversationId,
 }: {
     message: string;
-    areaSlug?: string;
+    areaSlug?: string | null;
     conversationId?: number | null;
 }) {
     const token = getStoredRagToken();
+    const normalizedAreaSlug = normalizeAreaSlug(areaSlug);
 
     try {
         const data = await fetchJson<RagChatResponse>("/chat", {
@@ -144,7 +152,9 @@ export async function askRag({
             },
             body: JSON.stringify({
                 message,
-                areaSlug,
+                ...(normalizedAreaSlug
+                    ? { areaSlug: normalizedAreaSlug }
+                    : { areaSlug: null }),
                 ...(conversationId ? { conversationId } : {}),
             }),
         });
@@ -157,6 +167,14 @@ export async function askRag({
 
         throw error;
     }
+}
+
+function normalizeAreaSlug(areaSlug?: string | null) {
+    const normalized = areaSlug?.trim().toLowerCase();
+
+    return normalized === "fiscal" || normalized === "laboral"
+        ? normalized
+        : null;
 }
 
 export function clearRagToken() {
