@@ -24,6 +24,21 @@ type MeResponse = {
     user: RagUser;
 };
 
+export type RagArea = {
+    id: number;
+    slug: string;
+    name: string;
+    description?: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdBy?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+};
+
+type AreasResponse = {
+    areas: RagArea[];
+};
+
 export type RagSource = {
     rank?: number;
     chunkId?: number;
@@ -140,6 +155,28 @@ export async function debugCurrentRagAuth() {
     };
 }
 
+export async function listRagAreas() {
+    const token = getStoredRagToken();
+
+    try {
+        const data = await fetchJson<AreasResponse>("/areas", {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        return data.areas.filter(
+            (area) => area.slug?.trim() && area.name?.trim(),
+        );
+    } catch (error) {
+        if (error instanceof Error && isRagAuthError(error.message)) {
+            sessionStorage.removeItem(RAG_TOKEN_STORAGE_KEY);
+        }
+
+        throw error;
+    }
+}
+
 export async function askRag({
     message,
     areaSlug = null,
@@ -181,11 +218,7 @@ export async function askRag({
 function normalizeAreaSlug(areaSlug?: string | null) {
     const normalized = areaSlug?.trim().toLowerCase();
 
-    return normalized === "fiscal" ||
-        normalized === "laboral" ||
-        normalized === "pricing"
-        ? normalized
-        : null;
+    return normalized || null;
 }
 
 export function clearRagToken() {

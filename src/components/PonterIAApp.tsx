@@ -5,8 +5,9 @@ import {
     getRagUserInitials,
     initRagAuth,
     isRagAuthError,
+    listRagAreas,
 } from "../lib/ragApi";
-import type { RagSource } from "../lib/ragApi";
+import type { RagArea, RagSource } from "../lib/ragApi";
 import {
     getBitrixUserDisplayName,
     getBitrixUserInitials,
@@ -29,23 +30,22 @@ type RagChatMessage = {
     sources?: RagSource[];
 };
 
-type ChatAreaSlug = "" | "fiscal" | "laboral" | "pricing";
+type ChatAreaSlug = string;
+type ChatAreaOption = {
+    value: ChatAreaSlug;
+    label: string;
+    activeLabel: string;
+};
 
 const CHAT_DRAFT_STORAGE_PREFIX = "PONTER_IA_CHAT_DRAFT";
 const CHAT_DRAFT_MAX_LENGTH = 8000;
 const CHAT_DRAFT_TTL_MS = 1000 * 60 * 60 * 24;
 
-const chatAreas: { value: ChatAreaSlug; label: string; activeLabel: string }[] =
-    [
-        {
-            value: "",
-            label: "General / Todas las áreas",
-            activeLabel: "Todas las áreas",
-        },
-        { value: "fiscal", label: "Fiscal", activeLabel: "Fiscal" },
-        { value: "laboral", label: "Laboral", activeLabel: "Laboral" },
-        { value: "pricing", label: "Pricing", activeLabel: "Pricing" },
-    ];
+const ALL_AREAS_OPTION: ChatAreaOption = {
+    value: "",
+    label: "General / Todas las áreas",
+    activeLabel: "Todas las áreas",
+};
 
 const mockChats: ChatItem[] = [
     {
@@ -141,6 +141,9 @@ export default function PonterIAApp() {
     const [conversationId, setConversationId] = useState<number | null>(null);
     const [selectedAreaSlug, setSelectedAreaSlug] =
         useState<ChatAreaSlug>("");
+    const [areas, setAreas] = useState<RagArea[]>([]);
+    const [loadingAreas, setLoadingAreas] = useState(false);
+    const [areasError, setAreasError] = useState("");
     const chatThreadRef = useRef<HTMLDivElement | null>(null);
     const messageTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const draftHydratedKeyRef = useRef("");
@@ -148,6 +151,17 @@ export default function PonterIAApp() {
     const skipNextDraftWriteRef = useRef(false);
     const chatStarted = ragMessages.length > 0 || sendingMessage;
     const normalizedAreaSlug = normalizeChatAreaSlug(selectedAreaSlug);
+    const chatAreaOptions = useMemo<ChatAreaOption[]>(
+        () => [
+            ALL_AREAS_OPTION,
+            ...areas.map((area) => ({
+                value: area.slug,
+                label: area.name,
+                activeLabel: area.name,
+            })),
+        ],
+        [areas],
+    );
     const draftStorageKey = useMemo(
         () => getChatDraftStorageKey(activeChatId, conversationId),
         [activeChatId, conversationId],
@@ -278,6 +292,40 @@ export default function PonterIAApp() {
         messageTextareaRef.current?.focus();
     }, [sendingMessage, bitrixUser.status]);
 
+    useEffect(() => {
+        if (bitrixUser.status !== "ready") return;
+
+        let cancelled = false;
+
+        async function loadAreas() {
+            setLoadingAreas(true);
+            setAreasError("");
+
+            try {
+                const nextAreas = await listRagAreasWithRefresh();
+
+                if (cancelled) return;
+
+                setAreas(nextAreas);
+            } catch {
+                if (cancelled) return;
+
+                setAreas([]);
+                setAreasError("No se pudieron cargar las áreas.");
+            } finally {
+                if (!cancelled) {
+                    setLoadingAreas(false);
+                }
+            }
+        }
+
+        void loadAreas();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [bitrixUser.status]);
+
     const filteredChats = useMemo(() => {
         const term = searchValue.trim().toLowerCase();
 
@@ -407,6 +455,28 @@ export default function PonterIAApp() {
                     areaSlug: normalizedAreaSlug,
                     conversationId,
                 });
+            }
+
+            throw error;
+        }
+    }
+
+    async function listRagAreasWithRefresh() {
+        try {
+            return await listRagAreas();
+        } catch (error) {
+            if (error instanceof Error && isRagAuthError(error.message)) {
+                const user = await initRagAuth();
+                const label = getRagUserDisplayName(user);
+
+                setBitrixUser((prev) => ({
+                    status: "ready",
+                    label,
+                    initials: getRagUserInitials(label),
+                    avatarUrl: prev.avatarUrl,
+                }));
+
+                return listRagAreas();
             }
 
             throw error;
@@ -770,7 +840,7 @@ export default function PonterIAApp() {
                                         )}
 
                                         <div className="main-tags flex flex-wrap items-center gap-2 pt-1">
-                                            {chatAreas.map((area) => {
+                                            {chatAreaOptions.map((area) => {
                                                 const active =
                                                     normalizedAreaSlug ===
                                                     area.value;
@@ -808,6 +878,18 @@ export default function PonterIAApp() {
                                                     </button>
                                                 );
                                             })}
+
+                                            {loadingAreas && (
+                                                <span className="px-2 text-xs text-slate-400 sm:text-sm">
+                                                    Cargando áreas...
+                                                </span>
+                                            )}
+
+                                            {areasError && !loadingAreas && (
+                                                <span className="px-2 text-xs text-slate-400 sm:text-sm">
+                                                    {areasError}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -821,9 +903,7 @@ export default function PonterIAApp() {
 }
 
 function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
-    return value === "fiscal" || value === "laboral" || value === "pricing"
-        ? value
-        : "";
+    return value?.trim().toLowerCase() || "";
 }
 
 function getChatDraftStorageKey(
