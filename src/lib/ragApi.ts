@@ -181,7 +181,9 @@ export async function askRag({
 function normalizeAreaSlug(areaSlug?: string | null) {
     const normalized = areaSlug?.trim().toLowerCase();
 
-    return normalized === "fiscal" || normalized === "laboral"
+    return normalized === "fiscal" ||
+        normalized === "laboral" ||
+        normalized === "pricing"
         ? normalized
         : null;
 }

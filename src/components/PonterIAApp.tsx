@@ -29,7 +29,7 @@ type RagChatMessage = {
     sources?: RagSource[];
 };
 
-type ChatAreaSlug = "" | "fiscal" | "laboral";
+type ChatAreaSlug = "" | "fiscal" | "laboral" | "pricing";
 
 const CHAT_DRAFT_STORAGE_PREFIX = "PONTER_IA_CHAT_DRAFT";
 const CHAT_DRAFT_MAX_LENGTH = 8000;
@@ -44,6 +44,7 @@ const chatAreas: { value: ChatAreaSlug; label: string; activeLabel: string }[] =
         },
         { value: "fiscal", label: "Fiscal", activeLabel: "Fiscal" },
         { value: "laboral", label: "Laboral", activeLabel: "Laboral" },
+        { value: "pricing", label: "Pricing", activeLabel: "Pricing" },
     ];
 
 const mockChats: ChatItem[] = [
@@ -820,7 +821,9 @@ export default function PonterIAApp() {
 }
 
 function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
-    return value === "fiscal" || value === "laboral" ? value : "";
+    return value === "fiscal" || value === "laboral" || value === "pricing"
+        ? value
+        : "";
 }
 
 function getChatDraftStorageKey(
