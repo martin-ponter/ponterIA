@@ -346,19 +346,41 @@ function getStoredRagToken() {
 
 async function fetchJson<T>(path: string, init?: RequestInit) {
     let response: Response;
+    const url = `${API_BASE_URL}${path}`;
 
     try {
-        response = await fetch(`${API_BASE_URL}${path}`, init);
+        response = await fetch(url, init);
     } catch {
         throw new Error(
             "No se pudo conectar con el backend RAG. Revisa CORS en Azure Functions para permitir este dominio de Vercel.",
         );
     }
 
-    const data = (await response.json().catch(() => ({
-        ok: false,
-        error: "Respuesta no valida del backend.",
-    }))) as ApiResponse<T>;
+    const responseText = await response.text();
+    let data: ApiResponse<T>;
+
+    try {
+        data = JSON.parse(responseText) as ApiResponse<T>;
+    } catch {
+        console.error("[RAG API] Respuesta no JSON", {
+            url,
+            method: init?.method || "GET",
+            status: response.status,
+            responseText,
+        });
+
+        throw new RagApiError(
+            `Respuesta no valida del backend. Status ${response.status}. Body: ${responseText.slice(0, 500)}`,
+            response.status,
+        );
+    }
+
+    console.info("[RAG API] Respuesta", {
+        url,
+        method: init?.method || "GET",
+        status: response.status,
+        data,
+    });
 
     if (!response.ok || !data.ok) {
         const isDevelopment = import.meta.env.DEV;

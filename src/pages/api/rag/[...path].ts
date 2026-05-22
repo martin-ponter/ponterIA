@@ -11,7 +11,7 @@ const FORWARDED_HEADERS = new Set([
     "content-type",
 ]);
 
-export const ALL: APIRoute = async ({ params, request }) => {
+const proxyRagRequest: APIRoute = async ({ params, request }) => {
     const path = params.path ?? "";
     const sourceUrl = new URL(request.url);
     const targetUrl = new URL(
@@ -28,11 +28,36 @@ export const ALL: APIRoute = async ({ params, request }) => {
     });
 
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
-    const response = await fetch(targetUrl, {
+    console.info("[RAG Proxy] Forwarding request", {
         method: request.method,
-        headers,
-        body: hasBody ? await request.arrayBuffer() : undefined,
+        sourcePath: sourceUrl.pathname,
+        targetUrl: targetUrl.toString(),
+        hasAuthorization: headers.has("authorization"),
     });
+
+    let response: Response;
+
+    try {
+        response = await fetch(targetUrl, {
+            method: request.method,
+            headers,
+            body: hasBody ? await request.arrayBuffer() : undefined,
+        });
+    } catch (error) {
+        console.error("[RAG Proxy] Azure request failed", {
+            method: request.method,
+            targetUrl: targetUrl.toString(),
+            error,
+        });
+
+        return Response.json(
+            {
+                ok: false,
+                error: "No se pudo conectar con el backend RAG desde el proxy.",
+            },
+            { status: 502 },
+        );
+    }
 
     const responseHeaders = new Headers();
     const contentType = response.headers.get("content-type");
@@ -47,3 +72,10 @@ export const ALL: APIRoute = async ({ params, request }) => {
         headers: responseHeaders,
     });
 };
+
+export const GET = proxyRagRequest;
+export const POST = proxyRagRequest;
+export const PUT = proxyRagRequest;
+export const PATCH = proxyRagRequest;
+export const DELETE = proxyRagRequest;
+export const OPTIONS = proxyRagRequest;
