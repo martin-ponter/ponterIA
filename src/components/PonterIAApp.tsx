@@ -26,6 +26,7 @@ type RagChatMessage = {
     sources?: RagSource[];
 };
 
+
 type ChatAreaSlug = string;
 type ChatAreaOption = {
     value: ChatAreaSlug;
@@ -575,8 +576,8 @@ export default function PonterIAApp() {
                     <div className="flex h-full min-h-0 flex-col p-4 sm:p-5">
                         <div
                             className={`mb-5 flex items-center ${sidebarOpen
-                                    ? "justify-between"
-                                    : "justify-center"
+                                ? "justify-between"
+                                : "justify-center"
                                 }`}
                         >
                             <button
@@ -738,7 +739,7 @@ export default function PonterIAApp() {
                                                                 {loading
                                                                     ? "Abriendo conversación..."
                                                                     : chat.lastMessage ||
-                                                                      "Sin mensajes todavía"}
+                                                                    "Sin mensajes todavía"}
                                                             </p>
                                                         </div>
 
@@ -920,7 +921,7 @@ export default function PonterIAApp() {
                                                     disabled={
                                                         sendingMessage ||
                                                         loadingConversationId !==
-                                                            null ||
+                                                        null ||
                                                         bitrixUser.status !==
                                                         "ready"
                                                     }
@@ -933,7 +934,7 @@ export default function PonterIAApp() {
                                                     disabled={
                                                         sendingMessage ||
                                                         loadingConversationId !==
-                                                            null ||
+                                                        null ||
                                                         !message.trim() ||
                                                         bitrixUser.status !==
                                                         "ready"
@@ -973,7 +974,7 @@ export default function PonterIAApp() {
                                                         disabled={
                                                             sendingMessage ||
                                                             loadingConversationId !==
-                                                                null ||
+                                                            null ||
                                                             bitrixUser.status !==
                                                             "ready"
                                                         }
@@ -985,7 +986,7 @@ export default function PonterIAApp() {
                                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
                                                             sendingMessage ||
                                                                 loadingConversationId !==
-                                                                    null ||
+                                                                null ||
                                                                 bitrixUser.status !==
                                                                 "ready"
                                                                 ? "cursor-not-allowed opacity-55"
