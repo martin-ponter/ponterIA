@@ -129,12 +129,7 @@ export class RagApiError extends Error {
     }
 }
 
-const DEFAULT_API_BASE_URL =
-    "https://ponter-functions-ekgcaxdve6cwbxhy.spaincentral-01.azurewebsites.net/api";
-
-const API_BASE_URL = (
-    import.meta.env.PUBLIC_RAG_API_BASE_URL || DEFAULT_API_BASE_URL
-).replace(/\/$/, "");
+const API_BASE_URL = "/api/rag";
 
 export async function initRagAuth() {
     if (!window.BX24) {
