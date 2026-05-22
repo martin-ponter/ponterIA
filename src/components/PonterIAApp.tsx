@@ -1,26 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     askRag,
+    getConversationMessages,
     getRagUserDisplayName,
     getRagUserInitials,
     initRagAuth,
     isRagAuthError,
+    listChatConversations,
     listRagAreas,
+    RagApiError,
 } from "../lib/ragApi";
-import type { RagArea, RagSource } from "../lib/ragApi";
+import type { Conversation, RagArea, RagSource } from "../lib/ragApi";
 import {
     getBitrixUserDisplayName,
     getBitrixUserInitials,
     getCurrentBitrixUser,
     validateBitrixAppAccess,
 } from "../lib/bitrix";
-
-type ChatItem = {
-    id: number;
-    title: string;
-    preview: string;
-    updatedAt: string;
-};
 
 type RagChatMessage = {
     id: number;
@@ -46,69 +42,6 @@ const ALL_AREAS_OPTION: ChatAreaOption = {
     label: "General / Todas las áreas",
     activeLabel: "Todas las áreas",
 };
-
-const mockChats: ChatItem[] = [
-    {
-        id: 1,
-        title: "Consulta IVA trimestral",
-        preview: "Cómo presentar el impuesto a una SL...",
-        updatedAt: "Hace 5 min",
-    },
-    {
-        id: 2,
-        title: "Duda sobre cliente internacional",
-        preview: "Quién del departamento debe revisar...",
-        updatedAt: "Hace 20 min",
-    },
-    {
-        id: 3,
-        title: "Onboarding nuevo trabajador",
-        preview: "Quién es mi supervisor y cómo escalar...",
-        updatedAt: "Ayer",
-    },
-    {
-        id: 4,
-        title: "Precios servicio contable",
-        preview: "Cuánto se suele cobrar por este caso...",
-        updatedAt: "Ayer",
-    },
-    {
-        id: 5,
-        title: "Procedimiento fiscal empresa",
-        preview: "Pasos para tramitar una gestión concreta...",
-        updatedAt: "Hace 2 días",
-    },
-    {
-        id: 6,
-        title: "Revisión documentación cliente",
-        preview: "Checklist y documentación previa para empezar...",
-        updatedAt: "Hace 3 días",
-    },
-    {
-        id: 7,
-        title: "Consulta sobre supervisor",
-        preview: "A quién debo escalar una incidencia interna...",
-        updatedAt: "Hace 4 días",
-    },
-    {
-        id: 8,
-        title: "Pricing servicio laboral",
-        preview: "Rango orientativo para un servicio recurrente...",
-        updatedAt: "Hace 5 días",
-    },
-    {
-        id: 9,
-        title: "Cliente con operativa internacional",
-        preview: "Qué área debe revisar esta consulta especial...",
-        updatedAt: "Hace 6 días",
-    },
-    {
-        id: 10,
-        title: "Alta de nuevo trabajador",
-        preview: "Pasos internos y responsables implicados...",
-        updatedAt: "Hace 1 semana",
-    },
-];
 
 type AccessState =
     | { status: "checking" }
@@ -137,8 +70,13 @@ export default function PonterIAApp() {
     const [ragMessages, setRagMessages] = useState<RagChatMessage[]>([]);
     const [chatError, setChatError] = useState("");
     const [sendingMessage, setSendingMessage] = useState(false);
-    const [activeChatId, setActiveChatId] = useState<number | null>(1);
     const [conversationId, setConversationId] = useState<number | null>(null);
+    const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [loadingConversations, setLoadingConversations] = useState(false);
+    const [loadingConversationId, setLoadingConversationId] = useState<
+        number | null
+    >(null);
+    const [conversationsError, setConversationsError] = useState("");
     const [selectedAreaSlug, setSelectedAreaSlug] =
         useState<ChatAreaSlug>("");
     const [areas, setAreas] = useState<RagArea[]>([]);
@@ -149,7 +87,9 @@ export default function PonterIAApp() {
     const draftHydratedKeyRef = useRef("");
     const suppressDraftRestoreKeyRef = useRef("");
     const skipNextDraftWriteRef = useRef(false);
-    const chatStarted = ragMessages.length > 0 || sendingMessage;
+    const conversationLoadRequestRef = useRef(0);
+    const chatStarted =
+        ragMessages.length > 0 || sendingMessage || loadingConversationId !== null;
     const normalizedAreaSlug = normalizeChatAreaSlug(selectedAreaSlug);
     const chatAreaOptions = useMemo<ChatAreaOption[]>(
         () => [
@@ -163,8 +103,8 @@ export default function PonterIAApp() {
         [areas],
     );
     const draftStorageKey = useMemo(
-        () => getChatDraftStorageKey(activeChatId, conversationId),
-        [activeChatId, conversationId],
+        () => getChatDraftStorageKey(conversationId),
+        [conversationId],
     );
 
     useEffect(() => {
@@ -326,16 +266,22 @@ export default function PonterIAApp() {
         };
     }, [bitrixUser.status]);
 
+    useEffect(() => {
+        if (bitrixUser.status !== "ready") return;
+
+        void refreshConversations();
+    }, [bitrixUser.status]);
+
     const filteredChats = useMemo(() => {
         const term = searchValue.trim().toLowerCase();
 
-        if (!term) return mockChats;
+        if (!term) return conversations;
 
-        return mockChats.filter((chat) => {
-            const fullText = `${chat.title} ${chat.preview}`.toLowerCase();
+        return conversations.filter((chat) => {
+            const fullText = `${chat.title} ${chat.lastMessage ?? ""}`.toLowerCase();
             return fullText.includes(term);
         });
-    }, [searchValue]);
+    }, [conversations, searchValue]);
 
     function handleToggleSidebar() {
         setSidebarOpen((prev) => !prev);
@@ -350,16 +296,73 @@ export default function PonterIAApp() {
     }
 
     function handleNewChat() {
-        setActiveChatId(null);
+        conversationLoadRequestRef.current += 1;
         setChatError("");
         setRagMessages([]);
+        setLoadingConversationId(null);
         setConversationId(null);
+    }
+
+    async function handleOpenConversation(nextConversationId: number) {
+        const requestId = conversationLoadRequestRef.current + 1;
+        conversationLoadRequestRef.current = requestId;
+        setChatError("");
+        setConversationId(nextConversationId);
+        setRagMessages([]);
+        setLoadingConversationId(nextConversationId);
+
+        try {
+            const data = await getConversationMessagesWithRefresh(
+                nextConversationId,
+            );
+
+            if (conversationLoadRequestRef.current !== requestId) return;
+
+            setSelectedAreaSlug(data.conversation.areaSlug ?? "");
+            setRagMessages(
+                data.messages.map((item) => ({
+                    id: item.id,
+                    role: item.role,
+                    content: item.content,
+                    createdAt: new Date(item.createdAt).getTime(),
+                })),
+            );
+        } catch (error) {
+            if (conversationLoadRequestRef.current !== requestId) return;
+
+            setRagMessages([]);
+            setConversationId(null);
+
+            if (error instanceof RagApiError && error.status === 404) {
+                setConversations((prev) =>
+                    prev.filter((chat) => chat.id !== nextConversationId),
+                );
+                setChatError(
+                    "No se pudo abrir esa conversación. Puede que ya no esté disponible.",
+                );
+            } else {
+                setChatError(
+                    error instanceof Error
+                        ? error.message
+                        : "No se pudo abrir la conversación.",
+                );
+            }
+        } finally {
+            if (conversationLoadRequestRef.current === requestId) {
+                setLoadingConversationId(null);
+            }
+        }
     }
 
     async function handleSendMessage() {
         const cleanMessage = message.trim();
 
-        if (!cleanMessage || sendingMessage || bitrixUser.status !== "ready") {
+        if (
+            !cleanMessage ||
+            sendingMessage ||
+            loadingConversationId !== null ||
+            bitrixUser.status !== "ready"
+        ) {
             return;
         }
 
@@ -385,7 +388,6 @@ export default function PonterIAApp() {
 
             if (typeof ragAnswer.conversationId === "number") {
                 const nextDraftStorageKey = getChatDraftStorageKey(
-                    activeChatId,
                     ragAnswer.conversationId,
                 );
 
@@ -408,6 +410,7 @@ export default function PonterIAApp() {
                     sources: ragAnswer.sources,
                 },
             ]);
+            void refreshConversations();
         } catch (error) {
             setChatError(
                 error instanceof Error
@@ -455,6 +458,68 @@ export default function PonterIAApp() {
                     areaSlug: normalizedAreaSlug,
                     conversationId,
                 });
+            }
+
+            throw error;
+        }
+    }
+
+    async function refreshConversations() {
+        setLoadingConversations(true);
+        setConversationsError("");
+
+        try {
+            const nextConversations = await listChatConversationsWithRefresh();
+            setConversations(nextConversations);
+        } catch (error) {
+            setConversationsError(
+                error instanceof Error
+                    ? error.message
+                    : "No se pudieron cargar las conversaciones.",
+            );
+        } finally {
+            setLoadingConversations(false);
+        }
+    }
+
+    async function listChatConversationsWithRefresh() {
+        try {
+            return await listChatConversations();
+        } catch (error) {
+            if (error instanceof Error && isRagAuthError(error.message)) {
+                const user = await initRagAuth();
+                const label = getRagUserDisplayName(user);
+
+                setBitrixUser((prev) => ({
+                    status: "ready",
+                    label,
+                    initials: getRagUserInitials(label),
+                    avatarUrl: prev.avatarUrl,
+                }));
+
+                return listChatConversations();
+            }
+
+            throw error;
+        }
+    }
+
+    async function getConversationMessagesWithRefresh(nextConversationId: number) {
+        try {
+            return await getConversationMessages(nextConversationId);
+        } catch (error) {
+            if (error instanceof Error && isRagAuthError(error.message)) {
+                const user = await initRagAuth();
+                const label = getRagUserDisplayName(user);
+
+                setBitrixUser((prev) => ({
+                    status: "ready",
+                    label,
+                    initials: getRagUserInitials(label),
+                    avatarUrl: prev.avatarUrl,
+                }));
+
+                return getConversationMessages(nextConversationId);
             }
 
             throw error;
@@ -616,22 +681,52 @@ export default function PonterIAApp() {
                                     </p>
 
                                     <div className="ponter-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto pr-3">
+                                        {loadingConversations && (
+                                            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+                                                Cargando conversaciones...
+                                            </div>
+                                        )}
+
+                                        {conversationsError &&
+                                            !loadingConversations && (
+                                                <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-sm leading-6 text-red-700">
+                                                    {conversationsError}
+                                                </div>
+                                            )}
+
+                                        {!loadingConversations &&
+                                            !conversationsError &&
+                                            filteredChats.length === 0 && (
+                                                <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm text-slate-500">
+                                                    No hay chats todavía
+                                                </div>
+                                            )}
+
                                         {filteredChats.map((chat) => {
                                             const active =
-                                                activeChatId === chat.id;
+                                                conversationId === chat.id;
+                                            const loading =
+                                                loadingConversationId ===
+                                                chat.id;
 
                                             return (
                                                 <button
                                                     key={`open-${chat.id}`}
                                                     type="button"
                                                     onClick={() =>
-                                                        setActiveChatId(chat.id)
+                                                        handleOpenConversation(
+                                                            chat.id,
+                                                        )
                                                     }
+                                                    disabled={loading}
                                                     className={[
                                                         "w-full rounded-2xl border p-3 text-left transition",
                                                         active
                                                             ? "border-[#69daa3]/60 bg-[#69daa3]/10 shadow-[0_10px_30px_rgba(105,218,163,0.08)]"
                                                             : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                                                        loading
+                                                            ? "cursor-wait opacity-70"
+                                                            : "",
                                                     ].join(" ")}
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
@@ -640,13 +735,20 @@ export default function PonterIAApp() {
                                                                 {chat.title}
                                                             </p>
                                                             <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                                                                {chat.preview}
+                                                                {loading
+                                                                    ? "Abriendo conversación..."
+                                                                    : chat.lastMessage ||
+                                                                      "Sin mensajes todavía"}
                                                             </p>
                                                         </div>
 
-                                                        <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                                                            {chat.updatedAt}
-                                                        </span>
+                                                        {chat.updatedAt && (
+                                                            <span className="shrink-0 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                                                                {formatConversationTimestamp(
+                                                                    chat.updatedAt,
+                                                                )}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </button>
                                             );
@@ -767,6 +869,14 @@ export default function PonterIAApp() {
                                         </div>
                                     ))}
 
+                                    {loadingConversationId !== null && (
+                                        <div className="flex justify-start">
+                                            <div className="max-w-[86%] rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm leading-6 text-slate-500 shadow-sm sm:max-w-[74%]">
+                                                Cargando conversación...
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {sendingMessage && (
                                         <div className="flex justify-start">
                                             <div className="max-w-[86%] rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm leading-6 text-slate-500 shadow-sm sm:max-w-[74%]">
@@ -809,6 +919,8 @@ export default function PonterIAApp() {
                                                     placeholder="Pregunta lo que quieras..."
                                                     disabled={
                                                         sendingMessage ||
+                                                        loadingConversationId !==
+                                                            null ||
                                                         bitrixUser.status !==
                                                         "ready"
                                                     }
@@ -820,6 +932,8 @@ export default function PonterIAApp() {
                                                     onClick={handleSendMessage}
                                                     disabled={
                                                         sendingMessage ||
+                                                        loadingConversationId !==
+                                                            null ||
                                                         !message.trim() ||
                                                         bitrixUser.status !==
                                                         "ready"
@@ -858,6 +972,8 @@ export default function PonterIAApp() {
                                                         }
                                                         disabled={
                                                             sendingMessage ||
+                                                            loadingConversationId !==
+                                                                null ||
                                                             bitrixUser.status !==
                                                             "ready"
                                                         }
@@ -868,6 +984,8 @@ export default function PonterIAApp() {
                                                                 ? "border-[#69daa3]/50 bg-[#69daa3]/15 text-[#2f8d69]"
                                                                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900",
                                                             sendingMessage ||
+                                                                loadingConversationId !==
+                                                                    null ||
                                                                 bitrixUser.status !==
                                                                 "ready"
                                                                 ? "cursor-not-allowed opacity-55"
@@ -906,16 +1024,9 @@ function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
     return value?.trim().toLowerCase() || "";
 }
 
-function getChatDraftStorageKey(
-    activeChatId: number | null,
-    conversationId: number | null,
-) {
+function getChatDraftStorageKey(conversationId: number | null) {
     const scope =
-        activeChatId !== null
-            ? `chat:${activeChatId}`
-            : conversationId !== null
-              ? `conversation:${conversationId}`
-              : "new";
+        conversationId !== null ? `conversation:${conversationId}` : "new";
 
     return `${CHAT_DRAFT_STORAGE_PREFIX}:${scope}`;
 }
@@ -1053,10 +1164,25 @@ function formatSourcePreview(source: RagSource) {
 }
 
 function formatMessageTimestamp(timestamp: number) {
+    if (!Number.isFinite(timestamp)) return "";
+
     return new Intl.DateTimeFormat("es-ES", {
         day: "2-digit",
         month: "2-digit",
         year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(new Date(timestamp));
+}
+
+function formatConversationTimestamp(value: string) {
+    const timestamp = new Date(value).getTime();
+
+    if (!Number.isFinite(timestamp)) return "";
+
+    return new Intl.DateTimeFormat("es-ES", {
+        day: "2-digit",
+        month: "2-digit",
         hour: "2-digit",
         minute: "2-digit",
     }).format(new Date(timestamp));

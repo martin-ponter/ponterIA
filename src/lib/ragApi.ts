@@ -39,6 +39,44 @@ type AreasResponse = {
     areas: RagArea[];
 };
 
+export type Conversation = {
+    id: number;
+    userId: string;
+    title: string;
+    areaId: number | null;
+    areaSlug: string | null;
+    areaName: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdAt: string;
+    updatedAt: string;
+    lastMessage: string | null;
+};
+
+export type ChatMessage = {
+    id: number;
+    conversationId: number;
+    role: "user" | "assistant";
+    content: string;
+    model: string | null;
+    metadata?: Record<string, unknown> | null;
+    createdAt: string;
+};
+
+export type ConversationMessagesResponse = {
+    conversation: {
+        id: number;
+        title: string;
+        areaSlug: string | null;
+        createdAt: string;
+        updatedAt: string;
+    };
+    messages: ChatMessage[];
+};
+
+type ConversationsResponse = {
+    conversations: Conversation[];
+};
+
 export type RagSource = {
     rank?: number;
     chunkId?: number;
@@ -77,7 +115,19 @@ export type RagChatResponse = {
     user?: RagUser;
 };
 
+export type ChatResponse = RagChatResponse;
+
 export const RAG_TOKEN_STORAGE_KEY = "PONTER_RAG_TOKEN";
+
+export class RagApiError extends Error {
+    status: number;
+
+    constructor(message: string, status: number) {
+        super(message);
+        this.name = "RagApiError";
+        this.status = status;
+    }
+}
 
 const DEFAULT_API_BASE_URL =
     "https://ponter-functions-ekgcaxdve6cwbxhy.spaincentral-01.azurewebsites.net/api";
@@ -167,6 +217,50 @@ export async function listRagAreas() {
 
         return data.areas.filter(
             (area) => area.slug?.trim() && area.name?.trim(),
+        );
+    } catch (error) {
+        if (error instanceof Error && isRagAuthError(error.message)) {
+            sessionStorage.removeItem(RAG_TOKEN_STORAGE_KEY);
+        }
+
+        throw error;
+    }
+}
+
+export async function listChatConversations() {
+    const token = getStoredRagToken();
+
+    try {
+        const data = await fetchJson<ConversationsResponse>(
+            "/chat/conversations",
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
+        );
+
+        return data.conversations;
+    } catch (error) {
+        if (error instanceof Error && isRagAuthError(error.message)) {
+            sessionStorage.removeItem(RAG_TOKEN_STORAGE_KEY);
+        }
+
+        throw error;
+    }
+}
+
+export async function getConversationMessages(conversationId: number) {
+    const token = getStoredRagToken();
+
+    try {
+        return await fetchJson<ConversationMessagesResponse>(
+            `/chat/conversations/${conversationId}/messages`,
+            {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
         );
     } catch (error) {
         if (error instanceof Error && isRagAuthError(error.message)) {
@@ -282,10 +376,11 @@ async function fetchJson<T>(path: string, init?: RequestInit) {
                 ? data.error
                 : "Error comunicando con el backend RAG.";
 
-        throw new Error(
+        throw new RagApiError(
             response.status === 401
                 ? `RAG auth error: ${errorMessage}`
                 : debugMessage || errorMessage,
+            response.status,
         );
     }
 
