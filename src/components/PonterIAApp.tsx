@@ -10,7 +10,7 @@ import {
     listRagAreas,
     RagApiError,
 } from "../lib/ragApi";
-import type { Conversation, RagArea, RagSource } from "../lib/ragApi";
+import type { Conversation, RagArea } from "../lib/ragApi";
 import {
     getBitrixUserDisplayName,
     getBitrixUserInitials,
@@ -23,7 +23,6 @@ type RagChatMessage = {
     role: "user" | "assistant";
     content: string;
     createdAt: number;
-    sources?: RagSource[];
 };
 
 
@@ -37,10 +36,11 @@ type ChatAreaOption = {
 const CHAT_DRAFT_STORAGE_PREFIX = "PONTER_IA_CHAT_DRAFT";
 const CHAT_DRAFT_MAX_LENGTH = 8000;
 const CHAT_DRAFT_TTL_MS = 1000 * 60 * 60 * 24;
+const HIDDEN_CHAT_AREA_NAMES = new Set(["general", "root"]);
 
 const ALL_AREAS_OPTION: ChatAreaOption = {
     value: "",
-    label: "General / Todas las áreas",
+    label: "Todas las áreas",
     activeLabel: "Todas las áreas",
 };
 
@@ -95,11 +95,13 @@ export default function PonterIAApp() {
     const chatAreaOptions = useMemo<ChatAreaOption[]>(
         () => [
             ALL_AREAS_OPTION,
-            ...areas.map((area) => ({
-                value: area.slug,
-                label: area.name,
-                activeLabel: area.name,
-            })),
+            ...areas
+                .filter((area) => !isHiddenChatArea(area))
+                .map((area) => ({
+                    value: area.slug,
+                    label: area.name,
+                    activeLabel: area.name,
+                })),
         ],
         [areas],
     );
@@ -408,7 +410,6 @@ export default function PonterIAApp() {
                     role: "assistant",
                     content: ragAnswer.answer,
                     createdAt: assistantMessageTimestamp,
-                    sources: ragAnswer.sources,
                 },
             ]);
             void refreshConversations();
@@ -849,11 +850,6 @@ export default function PonterIAApp() {
                                                 <p className="whitespace-pre-wrap">
                                                     {item.content}
                                                 </p>
-                                                {item.role === "assistant" && (
-                                                    <MessageSources
-                                                        sources={item.sources}
-                                                    />
-                                                )}
                                                 <p
                                                     className={[
                                                         "mt-2 text-right text-[10px] leading-none text-slate-400",
@@ -1025,6 +1021,13 @@ function normalizeChatAreaSlug(value?: string | null): ChatAreaSlug {
     return value?.trim().toLowerCase() || "";
 }
 
+function isHiddenChatArea(area: RagArea) {
+    const slug = normalizeChatAreaSlug(area.slug);
+    const name = normalizeChatAreaSlug(area.name);
+
+    return HIDDEN_CHAT_AREA_NAMES.has(slug) || HIDDEN_CHAT_AREA_NAMES.has(name);
+}
+
 function getChatDraftStorageKey(conversationId: number | null) {
     const scope =
         conversationId !== null ? `conversation:${conversationId}` : "new";
@@ -1090,78 +1093,6 @@ function removeChatDraft(storageKey: string) {
     } catch {
         // Ignore storage failures; draft persistence is non-critical.
     }
-}
-
-function MessageSources({ sources }: { sources?: RagSource[] }) {
-    if (!sources?.length) return null;
-
-    return (
-        <div className="mt-3 border-t border-slate-200 pt-3">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                Fuentes
-            </p>
-            <div className="space-y-2">
-                {sources.map((source, index) => (
-                    <div
-                        key={`${source.chunkId ?? source.documentId ?? source.rank ?? index}-${index}`}
-                        className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2"
-                    >
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-semibold text-slate-700">
-                                {formatSourceTitle(source, index)}
-                            </span>
-                            {source.areaSlug && (
-                                <span className="rounded-full border border-[#69daa3]/30 bg-[#69daa3]/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2f8d69]">
-                                    {source.areaSlug}
-                                </span>
-                            )}
-                            {formatSourcePages(source) && (
-                                <span className="text-[11px] text-slate-500">
-                                    {formatSourcePages(source)}
-                                </span>
-                            )}
-                        </div>
-                        {formatSourcePreview(source) && (
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">
-                                {formatSourcePreview(source)}
-                            </p>
-                        )}
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-function formatSourceTitle(source: RagSource, index: number) {
-    return (
-        source.documentTitle ||
-        source.title ||
-        source.fileName ||
-        source.filename ||
-        source.source ||
-        source.url ||
-        source.path ||
-        `Fuente ${source.rank ?? index + 1}`
-    );
-}
-
-function formatSourcePages(source: RagSource) {
-    if (!source.pageStart && !source.pageEnd && !source.page) return "";
-
-    if (
-        source.pageStart &&
-        source.pageEnd &&
-        source.pageStart !== source.pageEnd
-    ) {
-        return `pags. ${source.pageStart}-${source.pageEnd}`;
-    }
-
-    return `pag. ${source.pageStart || source.pageEnd || source.page}`;
-}
-
-function formatSourcePreview(source: RagSource) {
-    return source.preview || source.text || source.content || "";
 }
 
 function formatMessageTimestamp(timestamp: number) {
